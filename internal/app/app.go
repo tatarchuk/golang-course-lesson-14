@@ -1,21 +1,23 @@
-// Package app wires the whole HTTP API together.
-//
-// The automatic tests talk to your API ONLY through NewRouter(), so you are free to
-// organise the rest of the code (model, repository, handler, middleware) as you like.
 package app
 
-import "net/http"
+import (
+	"net/http"
 
-// NewRouter must return a fully configured HTTP handler for your resource.
-//
-// Requirements (see README.md for the full contract):
-//   - every call returns a NEW router with its own EMPTY in-memory storage;
-//   - it must be safe for concurrent requests;
-//   - it can be built with net/http, gin, chi or any other router.
-//
-// TODO: replace this stub with your implementation.
+	"homework/internal/handler"
+	"homework/internal/repository"
+)
+
+// NewRouter builds a complete HTTP handler with its own empty in-memory store.
 func NewRouter() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "not implemented", http.StatusNotImplemented)
-	})
+	repo := repository.NewMemoryRepository() // fresh store per router: no globals, tests stay isolated
+	albums := handler.NewAlbumHandler(repo)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handler.Health)
+	mux.HandleFunc("POST /api/v1/albums", albums.Create)
+	mux.HandleFunc("GET /api/v1/albums/{id}", albums.Get)
+	// stage 2: PUT and DELETE; stage 4: GET /api/v1/albums (list)
+	mux.HandleFunc("/", handler.NotFound) // everything else: JSON 404
+
+	return mux // stage 5 wraps this in middleware
 }
