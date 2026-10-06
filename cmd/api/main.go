@@ -8,6 +8,10 @@ import (
 	"homework/internal/app"
 )
 
+// @title        Albums API
+// @version      1.0
+// @description  REST API for albums: CRUD, filtering by genre and pagination.
+// @BasePath     /api/v1
 func main() {
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {

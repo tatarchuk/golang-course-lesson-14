@@ -1,0 +1,217 @@
+basePath: /api/v1
+definitions:
+  handler.ErrorDetail:
+    properties:
+      code:
+        example: not_found
+        type: string
+      message:
+        example: Album not found
+        type: string
+    type: object
+  handler.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/handler.ErrorDetail'
+    type: object
+  model.Album:
+    properties:
+      artist:
+        type: string
+      created_at:
+        description: RFC 3339, set once on creation
+        type: string
+      genre:
+        type: string
+      id:
+        type: integer
+      label:
+        type: string
+      notes:
+        description: null when not provided
+        type: string
+      release_year:
+        description: null when not provided
+        type: integer
+      title:
+        type: string
+      updated_at:
+        description: RFC 3339, changes on every PUT
+        type: string
+    type: object
+  model.AlbumInput:
+    properties:
+      artist:
+        example: Miles Davis
+        type: string
+      genre:
+        example: jazz
+        type: string
+      label:
+        example: Columbia
+        type: string
+      notes:
+        example: Recorded in 1959
+        type: string
+      release_year:
+        example: 1959
+        type: integer
+      title:
+        example: Kind of Blue
+        type: string
+    required:
+    - artist
+    - genre
+    - label
+    - title
+    type: object
+info:
+  contact: {}
+  description: 'REST API for albums: CRUD, filtering by genre and pagination.'
+  title: Albums API
+  version: "1.0"
+paths:
+  /albums:
+    get:
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page (max 100)
+        in: query
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Exact, case-sensitive genre filter
+        in: query
+        name: genre
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Album'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: List albums
+      tags:
+      - albums
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Album to create
+        in: body
+        name: album
+        required: true
+        schema:
+          $ref: '#/definitions/model.AlbumInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Album'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Create an album
+      tags:
+      - albums
+  /albums/{id}:
+    delete:
+      parameters:
+      - description: Album id (0..4294967295)
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Delete an album
+      tags:
+      - albums
+    get:
+      parameters:
+      - description: Album id (0..4294967295)
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Album'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get an album by id
+      tags:
+      - albums
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Album id (0..4294967295)
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Full replacement; omitted optional fields become null
+        in: body
+        name: album
+        required: true
+        schema:
+          $ref: '#/definitions/model.AlbumInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Album'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Replace an album (full update)
+      tags:
+      - albums
+swagger: "2.0"

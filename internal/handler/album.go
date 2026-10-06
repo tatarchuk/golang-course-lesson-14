@@ -21,6 +21,15 @@ func NewAlbumHandler(repo repository.AlbumRepository) *AlbumHandler {
 }
 
 // Create handles POST /api/v1/albums.
+//
+// @Summary  Create an album
+// @Tags     albums
+// @Accept   json
+// @Produce  json
+// @Param    album  body      model.AlbumInput  true  "Album to create"
+// @Success  201    {object}  model.Album
+// @Failure  422    {object}  ErrorResponse
+// @Router   /albums [post]
 func (h *AlbumHandler) Create(w http.ResponseWriter, r *http.Request) {
 	in, ok := h.readInput(w, r)
 	if !ok {
@@ -35,6 +44,15 @@ func (h *AlbumHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get handles GET /api/v1/albums/{id}.
+//
+// @Summary  Get an album by id
+// @Tags     albums
+// @Produce  json
+// @Param    id   path      int  true  "Album id (0..4294967295)"
+// @Success  200  {object}  model.Album
+// @Failure  400  {object}  ErrorResponse
+// @Failure  404  {object}  ErrorResponse
+// @Router   /albums/{id} [get]
 func (h *AlbumHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -52,6 +70,18 @@ func (h *AlbumHandler) Get(w http.ResponseWriter, r *http.Request) {
 // Update handles PUT /api/v1/albums/{id}. The check order is part of the contract:
 // id (400) -> body (422) -> existence (404). The repository is touched only after the body
 // is valid, so a rejected request changes nothing.
+//
+// @Summary  Replace an album (full update)
+// @Tags     albums
+// @Accept   json
+// @Produce  json
+// @Param    id     path      int               true  "Album id (0..4294967295)"
+// @Param    album  body      model.AlbumInput  true  "Full replacement; omitted optional fields become null"
+// @Success  200    {object}  model.Album
+// @Failure  400    {object}  ErrorResponse
+// @Failure  404    {object}  ErrorResponse
+// @Failure  422    {object}  ErrorResponse
+// @Router   /albums/{id} [put]
 func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -71,6 +101,14 @@ func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete handles DELETE /api/v1/albums/{id}.
+//
+// @Summary  Delete an album
+// @Tags     albums
+// @Param    id   path  int  true  "Album id (0..4294967295)"
+// @Success  204  "No Content"
+// @Failure  400  {object}  ErrorResponse
+// @Failure  404  {object}  ErrorResponse
+// @Router   /albums/{id} [delete]
 func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {
@@ -87,6 +125,16 @@ func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 const maxLimit = 100
 
 // List handles GET /api/v1/albums?page=&limit=&genre=.
+//
+// @Summary  List albums
+// @Tags     albums
+// @Produce  json
+// @Param    page   query     int     false  "Page number"                 minimum(1)  default(1)
+// @Param    limit  query     int     false  "Items per page (max 100)"    minimum(1)  default(10)
+// @Param    genre  query     string  false  "Exact, case-sensitive genre filter"
+// @Success  200    {array}   model.Album
+// @Failure  400    {object}  ErrorResponse
+// @Router   /albums [get]
 func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	page, okPage := parsePositiveInt(q, "page", 1)

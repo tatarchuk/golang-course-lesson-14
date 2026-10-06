@@ -15,13 +15,15 @@ const (
 	CodeInternal          = "internal_server_error"
 )
 
-type errorResponse struct {
-	Error errorDetail `json:"error"`
+// ErrorResponse is the envelope of every error reply: {"error":{"code":"...","message":"..."}}.
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
 }
 
-type errorDetail struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+// ErrorDetail carries the machine-readable code and a human-readable message.
+type ErrorDetail struct {
+	Code    string `json:"code" example:"not_found"`
+	Message string `json:"message" example:"Album not found"`
 }
 
 // WriteJSON sends v as JSON. Headers must be set BEFORE WriteHeader, or they are ignored.
@@ -35,5 +37,5 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 
 // WriteError sends the contract's envelope: {"error":{"code":"...","message":"..."}}.
 func WriteError(w http.ResponseWriter, status int, code, message string) {
-	WriteJSON(w, status, errorResponse{Error: errorDetail{Code: code, Message: message}})
+	WriteJSON(w, status, ErrorResponse{Error: ErrorDetail{Code: code, Message: message}})
 }
