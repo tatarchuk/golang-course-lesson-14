@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"homework/internal/handler"
+	"homework/internal/middleware"
 	"homework/internal/repository"
 )
 
@@ -21,5 +22,5 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("GET /api/v1/albums", albums.List)
 	mux.HandleFunc("/", handler.NotFound) // everything else: JSON 404
 
-	return mux // stage 5 wraps this in middleware
+	return middleware.Logging(middleware.Recover(middleware.CORS(mux)))
 }
