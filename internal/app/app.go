@@ -16,9 +16,9 @@ func NewRouter() http.Handler {
 	mux.HandleFunc("GET /health", handler.Health)
 	mux.HandleFunc("POST /api/v1/albums", albums.Create)
 	mux.HandleFunc("GET /api/v1/albums/{id}", albums.Get)
-	// stage 2: PUT and DELETE; stage 4: GET /api/v1/albums (list)
 	mux.HandleFunc("PUT /api/v1/albums/{id}", albums.Update)
 	mux.HandleFunc("DELETE /api/v1/albums/{id}", albums.Delete)
+	mux.HandleFunc("GET /api/v1/albums", albums.List)
 	mux.HandleFunc("/", handler.NotFound) // everything else: JSON 404
 
 	return mux // stage 5 wraps this in middleware

@@ -84,6 +84,28 @@ func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent) // 204: no body, no Content-Type
 }
 
+const maxLimit = 100
+
+// List handles GET /api/v1/albums?page=&limit=&genre=.
+func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	page, okPage := parsePositiveInt(q, "page", 1)
+	limit, okLimit := parsePositiveInt(q, "limit", 10)
+	if !okPage || !okLimit {
+		WriteError(w, http.StatusBadRequest, CodeInvalidPagination, "page and limit must be integers >= 1")
+		return
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	albums, err := h.repo.List(repository.ListOptions{Genre: q.Get("genre"), Page: page, Limit: limit})
+	if err != nil {
+		h.storageError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, albums)
+}
+
 // readInput decodes and validates the body. On failure it writes the 422 and returns false.
 func (h *AlbumHandler) readInput(w http.ResponseWriter, r *http.Request) (model.AlbumInput, bool) {
 	var in model.AlbumInput

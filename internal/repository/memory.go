@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -54,9 +54,36 @@ func (r *MemoryRepository) Get(id int64) (model.Album, error) {
 	return a, nil // a copy of the stored value
 }
 
-// Temporary stubs so the interface is satisfied; implemented in stages 2-4.
 func (r *MemoryRepository) List(opts ListOptions) ([]model.Album, error) {
-	return nil, errors.New("not implemented")
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make([]model.Album, 0, len(r.albums)) // non-nil, so an empty result encodes as []
+	for _, a := range r.albums {
+		if opts.Genre == "" || a.Genre == opts.Genre {
+			out = append(out, a)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID }) // map order is random
+	return paginate(out, opts.Page, opts.Limit), nil
+}
+
+// paginate returns one page of items. page >= 1 and limit >= 1 are guaranteed by the caller.
+func paginate(items []model.Album, page, limit int) []model.Album {
+	// (page-1)*limit can overflow for page = MaxInt64. This guard compares against a small
+	// number instead; if it is true the page is past the end and the offset is never computed.
+	if page-1 > len(items)/limit {
+		return []model.Album{}
+	}
+	start := (page - 1) * limit
+	if start >= len(items) {
+		return []model.Album{}
+	}
+	end := start + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[start:end]
 }
 
 func (r *MemoryRepository) Update(id int64, in model.AlbumInput) (model.Album, error) {

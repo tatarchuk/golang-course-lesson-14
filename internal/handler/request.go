@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 )
 
@@ -39,4 +40,24 @@ func parseID(raw string) (int64, bool) {
 		return 0, false
 	}
 	return int64(n), true
+}
+
+// parsePositiveInt reads an optional query parameter that must be an integer >= 1.
+// Absent (or empty) means "use the default".
+func parsePositiveInt(q url.Values, key string, def int) (int, bool) {
+	raw := q.Get(key)
+	if raw == "" {
+		return def, true
+	}
+	n, err := strconv.ParseInt(raw, 10, strconv.IntSize)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return 0, false // not a number at all ("abc", "1.5")
+	}
+	// On ErrRange ParseInt returns the clamped MaxInt/MinInt: "99999999999999999999" is a
+	// legitimate integer that simply does not fit, so we keep MaxInt and let the caller treat
+	// it as "far beyond the data" (page) or clamp it (limit). MinInt fails the next check.
+	if n < 1 {
+		return 0, false
+	}
+	return int(n), true
 }
