@@ -60,9 +60,29 @@ func (r *MemoryRepository) List(opts ListOptions) ([]model.Album, error) {
 }
 
 func (r *MemoryRepository) Update(id int64, in model.AlbumInput) (model.Album, error) {
-	return model.Album{}, errors.New("not implemented")
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	a, ok := r.albums[id]
+	if !ok {
+		return model.Album{}, ErrNotFound
+	}
+	// PUT is a full replacement: every field comes from the input,
+	// so an omitted optional field becomes nil -> null. ID and CreatedAt are kept.
+	a.Title, a.Artist, a.Label, a.Genre = in.Title, in.Artist, in.Label, in.Genre
+	a.ReleaseYear, a.Notes = in.ReleaseYear, in.Notes
+	a.UpdatedAt = time.Now().UTC()
+	r.albums[id] = a // a is a copy; write it back
+	return a, nil
 }
 
 func (r *MemoryRepository) Delete(id int64) error {
-	return errors.New("not implemented")
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.albums[id]; !ok {
+		return ErrNotFound
+	}
+	delete(r.albums, id)
+	return nil
 }

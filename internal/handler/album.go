@@ -49,6 +49,41 @@ func (h *AlbumHandler) Get(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, album)
 }
 
+// Update handles PUT /api/v1/albums/{id}. The check order is part of the contract:
+// id (400) -> body (422) -> existence (404). The repository is touched only after the body
+// is valid, so a rejected request changes nothing.
+func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		WriteError(w, http.StatusBadRequest, CodeInvalidID, msgInvalidID)
+		return
+	}
+	in, ok := h.readInput(w, r)
+	if !ok {
+		return
+	}
+	album, err := h.repo.Update(id, in)
+	if err != nil {
+		h.storageError(w, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, album)
+}
+
+// Delete handles DELETE /api/v1/albums/{id}.
+func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		WriteError(w, http.StatusBadRequest, CodeInvalidID, msgInvalidID)
+		return
+	}
+	if err := h.repo.Delete(id); err != nil {
+		h.storageError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent) // 204: no body, no Content-Type
+}
+
 // readInput decodes and validates the body. On failure it writes the 422 and returns false.
 func (h *AlbumHandler) readInput(w http.ResponseWriter, r *http.Request) (model.AlbumInput, bool) {
 	var in model.AlbumInput
