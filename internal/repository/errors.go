@@ -2,8 +2,8 @@ package repository
 
 import (
 	"errors"
-	"fmt"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
@@ -22,10 +22,18 @@ var (
 	ErrInvalidInput = errors.New("value rejected by the database")
 )
 
+// albumChildConstraints are the foreign keys that point from a child table to albums.
+// A violation there means the album vanished between the existence check and the
+// write (a concurrent DELETE), which is a 404 for the client, not a bad reference.
+var albumChildConstraints = map[string]bool{
+	"fk_copies_album":        true,
+	"fk_album_artists_album": true,
+}
+
 // translate maps the errors GORM produces (with TranslateError enabled the postgres
-// driver turns SQLSTATE 23505, 23503 and 23514 into typed errors) to the package
-// errors above. Errors that are already package errors, and unknown errors, pass
-// through unchanged.
+// driver turns SQLSTATE 23505, 23503 and 23514 into typed errors) to the bare package
+// errors above, so no driver text ever reaches a client. Errors that are already
+// package errors, and unknown errors, pass through unchanged.
 func translate(err error) error {
 	switch {
 	case err == nil:
@@ -33,11 +41,23 @@ func translate(err error) error {
 	case errors.Is(err, gorm.ErrRecordNotFound):
 		return ErrNotFound
 	case errors.Is(err, gorm.ErrDuplicatedKey):
-		return fmt.Errorf("%w: %v", ErrConflict, err)
+		return ErrConflict
 	case errors.Is(err, gorm.ErrForeignKeyViolated):
-		return fmt.Errorf("%w: %v", ErrInvalidReference, err)
+		if albumChildConstraints[constraintName(err)] {
+			return ErrNotFound
+		}
+		return ErrInvalidReference
 	case errors.Is(err, gorm.ErrCheckConstraintViolated):
-		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		return ErrInvalidInput
 	}
 	return err
+}
+
+// constraintName extracts the violated constraint from the wrapped driver error.
+func constraintName(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.ConstraintName
+	}
+	return ""
 }

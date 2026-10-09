@@ -1,4 +1,5 @@
-.PHONY: up down db logs run test migrate-up migrate-down swagger measure
+.PHONY: help up down db logs run test migrate-up migrate-down swagger measure
+.DEFAULT_GOAL := help
 
 COMPOSE ?= docker compose
 MIGRATE  = go run -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.17.1
@@ -8,6 +9,9 @@ ifneq (,$(wildcard .env))
 include .env
 export
 endif
+
+help:          ## list the targets
+	@grep -E "^[a-z-]+:.*## " Makefile | awk -F ":.*## " "{printf \"  %-14s %s\\n\", \$$1, \$$2}"
 
 up:            ## build the image and start postgres + api
 	$(COMPOSE) up -d --build

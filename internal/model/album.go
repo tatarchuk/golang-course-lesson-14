@@ -1,6 +1,16 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+// Bounds for release_year: the column is a 32-bit INTEGER and a year outside this
+// range is a typo, not a release.
+const (
+	minReleaseYear = 0
+	maxReleaseYear = 9999
+)
 
 // Album is the stored resource; its JSON tags define the response shape.
 // The genre is a belongs-to relation and the artists a many-to-many relation through
@@ -42,6 +52,9 @@ func (in AlbumInput) Validate() error {
 	problems := requiredProblem(field{"title", in.Title}, field{"label", in.Label})
 	if in.GenreID < 1 {
 		problems = append(problems, "genre_id must be a positive integer")
+	}
+	if in.ReleaseYear != nil && (*in.ReleaseYear < minReleaseYear || *in.ReleaseYear > maxReleaseYear) {
+		problems = append(problems, fmt.Sprintf("release_year must be between %d and %d", minReleaseYear, maxReleaseYear))
 	}
 	switch {
 	case len(in.ArtistIDs) == 0:

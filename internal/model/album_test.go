@@ -132,3 +132,21 @@ func TestAlbumInputUnmarshalsNullOptionalsAsNil(t *testing.T) {
 		t.Fatalf("expected nil optionals, got %v %v", in.ReleaseYear, in.Notes)
 	}
 }
+
+func TestAlbumInputValidateRejectsReleaseYearOutOfRange(t *testing.T) {
+	for _, year := range []int{-5, 10000, 99999999999} {
+		in := validAlbumInput()
+		in.ReleaseYear = &year
+		err := in.Validate()
+		if !errors.Is(err, ErrValidation) || !strings.Contains(err.Error(), "release_year") {
+			t.Errorf("release_year=%d: expected ErrValidation naming release_year, got %v", year, err)
+		}
+	}
+	for _, year := range []int{0, 1959, 9999} {
+		in := validAlbumInput()
+		in.ReleaseYear = &year
+		if err := in.Validate(); err != nil {
+			t.Errorf("release_year=%d: expected no error, got %v", year, err)
+		}
+	}
+}
