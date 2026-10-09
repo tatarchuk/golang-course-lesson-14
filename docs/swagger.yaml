@@ -16,13 +16,17 @@ definitions:
     type: object
   model.Album:
     properties:
-      artist:
-        type: string
+      artists:
+        items:
+          $ref: '#/definitions/model.Artist'
+        type: array
       created_at:
         description: RFC 3339, set once on creation
         type: string
       genre:
-        type: string
+        $ref: '#/definitions/model.Genre'
+      genre_id:
+        type: integer
       id:
         type: integer
       label:
@@ -41,12 +45,13 @@ definitions:
     type: object
   model.AlbumInput:
     properties:
-      artist:
-        example: Miles Davis
-        type: string
-      genre:
-        example: jazz
-        type: string
+      artist_ids:
+        items:
+          type: integer
+        type: array
+      genre_id:
+        example: 1
+        type: integer
       label:
         example: Columbia
         type: string
@@ -60,16 +65,96 @@ definitions:
         example: Kind of Blue
         type: string
     required:
-    - artist
-    - genre
+    - artist_ids
+    - genre_id
     - label
     - title
     type: object
+  model.Artist:
+    properties:
+      bio:
+        description: null when not provided
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.ArtistInput:
+    properties:
+      bio:
+        example: Trumpeter and bandleader.
+        type: string
+      name:
+        example: Miles Davis
+        type: string
+    required:
+    - name
+    type: object
+  model.Availability:
+    properties:
+      album_id:
+        type: integer
+      available_copies:
+        type: integer
+      total_copies:
+        type: integer
+    type: object
+  model.Copy:
+    properties:
+      album_id:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      inventory_no:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.CopyInput:
+    properties:
+      inventory_no:
+        example: INV-0001
+        type: string
+      status:
+        example: available
+        type: string
+    required:
+    - inventory_no
+    type: object
+  model.Genre:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.GenreInput:
+    properties:
+      name:
+        example: jazz
+        type: string
+    required:
+    - name
+    type: object
 info:
   contact: {}
-  description: 'REST API for albums: CRUD, filtering by genre and pagination.'
+  description: 'REST API for a music album catalogue on PostgreSQL: genres, artists,
+    albums and their physical copies.'
   title: Albums API
-  version: "1.0"
+  version: "2.0"
 paths:
   /albums:
     get:
@@ -86,10 +171,10 @@ paths:
         minimum: 1
         name: limit
         type: integer
-      - description: Exact, case-sensitive genre filter
+      - description: Only albums of this genre
         in: query
-        name: genre
-        type: string
+        name: genre_id
+        type: integer
       produces:
       - application/json
       responses:
@@ -110,7 +195,8 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Album to create
+      - description: Album to create; genre_id and artist_ids must reference existing
+          rows
         in: body
         name: album
         required: true
@@ -123,8 +209,12 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.Album'
+        "409":
+          description: An album with the same title and label exists
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "422":
-          description: Unprocessable Entity
+          description: validation_error or invalid_reference
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
       summary: Create an album
@@ -186,7 +276,8 @@ paths:
         name: id
         required: true
         type: integer
-      - description: Full replacement; omitted optional fields become null
+      - description: Full replacement; omitted optional fields become null, artist_ids
+          replace the previous artists
         in: body
         name: album
         required: true
@@ -207,6 +298,10 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "422":
           description: Unprocessable Entity
           schema:
@@ -214,4 +309,231 @@ paths:
       summary: Replace an album (full update)
       tags:
       - albums
+  /albums/{id}/availability:
+    get:
+      parameters:
+      - description: Album id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Availability'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Count the copies of an album and how many are available
+      tags:
+      - copies
+  /albums/{id}/copies:
+    get:
+      parameters:
+      - description: Album id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Copy'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: List the copies of an album
+      tags:
+      - copies
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Album id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Copy to add; status defaults to available
+        in: body
+        name: copy
+        required: true
+        schema:
+          $ref: '#/definitions/model.CopyInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Copy'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Album not found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Inventory number already used
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Add a physical copy to an album
+      tags:
+      - copies
+  /artists:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Artist'
+            type: array
+      summary: List artists
+      tags:
+      - artists
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Artist to create
+        in: body
+        name: artist
+        required: true
+        schema:
+          $ref: '#/definitions/model.ArtistInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Artist'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Create an artist
+      tags:
+      - artists
+  /artists/{id}:
+    get:
+      parameters:
+      - description: Artist id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Artist'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get an artist by id
+      tags:
+      - artists
+  /genres:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Genre'
+            type: array
+      summary: List genres
+      tags:
+      - genres
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Genre to create
+        in: body
+        name: genre
+        required: true
+        schema:
+          $ref: '#/definitions/model.GenreInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Genre'
+        "409":
+          description: A genre with this name exists
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Create a genre
+      tags:
+      - genres
+  /genres/{id}:
+    get:
+      parameters:
+      - description: Genre id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Genre'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get a genre by id
+      tags:
+      - genres
 swagger: "2.0"

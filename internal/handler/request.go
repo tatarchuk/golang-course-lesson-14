@@ -61,3 +61,48 @@ func parsePositiveInt(q url.Values, key string, def int) (int, bool) {
 	}
 	return int(n), true
 }
+
+// parseOptionalID reads an optional query parameter that, when present and not empty,
+// must be a positive integer (used for the genre_id filter). Absent means "no filter".
+func parseOptionalID(q url.Values, key string) (int64, bool) {
+	raw := q.Get(key)
+	if raw == "" {
+		return 0, true
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	return n, true
+}
+
+// validator is implemented by every request body type.
+type validator interface {
+	Validate() error
+}
+
+// readInput decodes the body into dst and validates it. On failure it writes the 422
+// response and returns false, so a handler can simply return.
+func readInput(w http.ResponseWriter, r *http.Request, dst validator) bool {
+	if err := decodeJSON(w, r, dst); err != nil {
+		WriteError(w, http.StatusUnprocessableEntity, CodeValidation, decodeMessage(err))
+		return false
+	}
+	if err := dst.Validate(); err != nil {
+		WriteError(w, http.StatusUnprocessableEntity, CodeValidation, err.Error())
+		return false
+	}
+	return true
+}
+
+// pathID parses the {id} path value. On failure it writes the 400 response and returns false.
+func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, ok := parseID(r.PathValue("id"))
+	if !ok {
+		WriteError(w, http.StatusBadRequest, CodeInvalidID, msgInvalidID)
+		return 0, false
+	}
+	return id, true
+}
+
+const msgInvalidID = "id must be an integer between 0 and 4294967295"

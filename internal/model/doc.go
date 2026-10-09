@@ -1,2 +1,2 @@
-// Package model holds the domain type and the request structs for your resource.
+// Package model holds the domain types (GORM models) and the request structs.
 package model

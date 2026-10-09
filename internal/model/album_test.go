@@ -5,98 +5,130 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
-func validInput() AlbumInput {
-	return AlbumInput{Title: "Kind of Blue", Artist: "Miles Davis", Label: "Columbia", Genre: "jazz"}
-}
-
-func TestValidateAcceptsCompleteInput(t *testing.T) {
-	if err := validInput().Validate(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func validAlbumInput() AlbumInput {
+	year := 1959
+	notes := "Recorded in 1959"
+	return AlbumInput{
+		Title:       "Kind of Blue",
+		Label:       "Columbia",
+		GenreID:     1,
+		ArtistIDs:   []int64{1, 2},
+		ReleaseYear: &year,
+		Notes:       &notes,
 	}
 }
 
-func TestValidateRejectsMissingOrBlankRequiredFields(t *testing.T) {
-	cases := []struct {
-		name   string
-		change func(in *AlbumInput)
-		field  string // the field the message must name
-	}{
-		{"empty title", func(in *AlbumInput) { in.Title = "" }, "title"},
-		{"blank artist", func(in *AlbumInput) { in.Artist = "   " }, "artist"},
-		{"empty label", func(in *AlbumInput) { in.Label = "" }, "label"},
-		{"tab genre", func(in *AlbumInput) { in.Genre = "\t" }, "genre"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			in := validInput()
-			tc.change(&in)
-
-			err := in.Validate()
-
-			if !errors.Is(err, ErrValidation) {
-				t.Fatalf("want ErrValidation, got %v", err)
-			}
-			if !strings.Contains(err.Error(), tc.field) {
-				t.Errorf("message %q does not name field %q", err, tc.field)
-			}
-		})
+func TestAlbumInputValidateAcceptsCompleteInput(t *testing.T) {
+	if err := validAlbumInput().Validate(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
-func TestValidateListsEveryMissingFieldInDeclarationOrder(t *testing.T) {
-	err := AlbumInput{}.Validate()
-	if err == nil {
-		t.Fatal("expected an error for an empty input")
-	}
-	const want = "title, artist, label, genre"
-	if !strings.Contains(err.Error(), want) {
-		t.Errorf("message %q should list %q", err, want)
+func TestAlbumInputValidateAcceptsOmittedOptionalFields(t *testing.T) {
+	in := validAlbumInput()
+	in.ReleaseYear, in.Notes = nil, nil
+	if err := in.Validate(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
-// Optional fields are pointers so that an unset field is encoded as null, never omitted.
-func TestOptionalFieldsMarshalAsNullWhenUnset(t *testing.T) {
-	b, err := json.Marshal(Album{ID: 1, Title: "t"})
-	if err != nil {
-		t.Fatal(err)
+func TestAlbumInputValidateRejectsMissingOrBlankRequiredFields(t *testing.T) {
+	in := validAlbumInput()
+	in.Title, in.Label = "", "   "
+	err := in.Validate()
+	if !errors.Is(err, ErrValidation) {
+		t.Fatalf("expected ErrValidation, got %v", err)
 	}
-	for _, want := range []string{`"release_year":null`, `"notes":null`} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("JSON %s should contain %s", b, want)
+	for _, field := range []string{"title", "label"} {
+		if !strings.Contains(err.Error(), field) {
+			t.Errorf("error %q should name %q", err, field)
 		}
 	}
 }
 
-func TestOptionalFieldsUnmarshalNullAsNil(t *testing.T) {
-	var in AlbumInput
-	if err := json.Unmarshal([]byte(`{"title":"t","release_year":null,"notes":"n"}`), &in); err != nil {
-		t.Fatal(err)
-	}
-	if in.ReleaseYear != nil {
-		t.Errorf("release_year: want nil, got %d", *in.ReleaseYear)
-	}
-	if in.Notes == nil || *in.Notes != "n" {
-		t.Errorf("notes: want %q, got %v", "n", in.Notes)
+func TestAlbumInputValidateRejectsNonPositiveGenreID(t *testing.T) {
+	for _, id := range []int64{0, -1} {
+		in := validAlbumInput()
+		in.GenreID = id
+		err := in.Validate()
+		if !errors.Is(err, ErrValidation) || !strings.Contains(err.Error(), "genre_id") {
+			t.Errorf("genre_id=%d: expected ErrValidation naming genre_id, got %v", id, err)
+		}
 	}
 }
 
-// Type errors are the decoder's job, not Validate's: these bodies must fail to decode.
-func TestInputRejectsWrongJSONTypes(t *testing.T) {
+func TestAlbumInputValidateRejectsEmptyOrInvalidArtistIDs(t *testing.T) {
+	cases := map[string][]int64{
+		"nil":       nil,
+		"empty":     {},
+		"zero":      {0},
+		"negative":  {1, -2},
+		"duplicate": {1, 1},
+	}
+	for name, ids := range cases {
+		in := validAlbumInput()
+		in.ArtistIDs = ids
+		err := in.Validate()
+		if !errors.Is(err, ErrValidation) || !strings.Contains(err.Error(), "artist_ids") {
+			t.Errorf("%s: expected ErrValidation naming artist_ids, got %v", name, err)
+		}
+	}
+}
+
+func TestAlbumMarshalsOptionalFieldsAsNullAndRelationsAsObjects(t *testing.T) {
+	a := Album{
+		ID:        1,
+		Title:     "Kind of Blue",
+		Label:     "Columbia",
+		GenreID:   1,
+		Genre:     Genre{ID: 1, Name: "jazz"},
+		Artists:   []Artist{{ID: 1, Name: "Miles Davis"}},
+		CreatedAt: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC),
+	}
+	b, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	for _, want := range []string{
+		`"release_year":null`, `"notes":null`, `"genre_id":1`,
+		`"genre":{"id":1,"name":"jazz"`, `"artists":[{"id":1,"name":"Miles Davis","bio":null`,
+		`"created_at":"2026-10-09T12:00:00Z"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("JSON %s should contain %s", s, want)
+		}
+	}
+}
+
+func TestAlbumInputRejectsWrongJSONTypes(t *testing.T) {
 	bodies := map[string]string{
-		"string for int":   `{"release_year":"1999"}`,
-		"fraction for int": `{"release_year":1999.5}`,
-		"number for text":  `{"notes":42}`,
-		"number for title": `{"title":1}`,
-		"array body":       `[1,2,3]`,
+		"release_year string": `{"title":"T","label":"L","genre_id":1,"artist_ids":[1],"release_year":"1999"}`,
+		"release_year float":  `{"title":"T","label":"L","genre_id":1,"artist_ids":[1],"release_year":1999.5}`,
+		"notes number":        `{"title":"T","label":"L","genre_id":1,"artist_ids":[1],"notes":42}`,
+		"genre_id string":     `{"title":"T","label":"L","genre_id":"1","artist_ids":[1]}`,
+		"artist_ids string":   `{"title":"T","label":"L","genre_id":1,"artist_ids":"1,2"}`,
+		"title number":        `{"title":7,"label":"L","genre_id":1,"artist_ids":[1]}`,
 	}
 	for name, body := range bodies {
-		t.Run(name, func(t *testing.T) {
-			var in AlbumInput
-			if err := json.Unmarshal([]byte(body), &in); err == nil {
-				t.Errorf("Unmarshal(%s) should fail", body)
-			}
-		})
+		var in AlbumInput
+		if err := json.Unmarshal([]byte(body), &in); err == nil {
+			t.Errorf("%s: expected a decoding error", name)
+		}
+	}
+}
+
+func TestAlbumInputUnmarshalsNullOptionalsAsNil(t *testing.T) {
+	var in AlbumInput
+	body := `{"title":"T","label":"L","genre_id":1,"artist_ids":[1],"release_year":null,"notes":null}`
+	if err := json.Unmarshal([]byte(body), &in); err != nil {
+		t.Fatal(err)
+	}
+	if in.ReleaseYear != nil || in.Notes != nil {
+		t.Fatalf("expected nil optionals, got %v %v", in.ReleaseYear, in.Notes)
 	}
 }

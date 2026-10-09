@@ -1,3 +1,4 @@
+// Package app assembles the HTTP handler: repositories -> handlers -> ServeMux -> middleware.
 package app
 
 import (
@@ -11,18 +12,35 @@ import (
 	"homework/internal/repository"
 )
 
-// NewRouter builds a complete HTTP handler with its own empty in-memory store.
-func NewRouter() http.Handler {
-	repo := repository.NewMemoryRepository() // fresh store per router: no globals, tests stay isolated
-	albums := handler.NewAlbumHandler(repo)
+// NewRouter builds the complete HTTP handler on top of the given repositories.
+// Handlers depend on interfaces only, so tests can pass fakes and main passes GORM.
+func NewRouter(repos repository.Repositories) http.Handler {
+	albums := handler.NewAlbumHandler(repos.Albums)
+	artists := handler.NewArtistHandler(repos.Artists)
+	genres := handler.NewGenreHandler(repos.Genres)
+	copies := handler.NewCopyHandler(repos.Copies)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health)
+
+	mux.HandleFunc("POST /api/v1/genres", genres.Create)
+	mux.HandleFunc("GET /api/v1/genres", genres.List)
+	mux.HandleFunc("GET /api/v1/genres/{id}", genres.Get)
+
+	mux.HandleFunc("POST /api/v1/artists", artists.Create)
+	mux.HandleFunc("GET /api/v1/artists", artists.List)
+	mux.HandleFunc("GET /api/v1/artists/{id}", artists.Get)
+
 	mux.HandleFunc("POST /api/v1/albums", albums.Create)
+	mux.HandleFunc("GET /api/v1/albums", albums.List)
 	mux.HandleFunc("GET /api/v1/albums/{id}", albums.Get)
 	mux.HandleFunc("PUT /api/v1/albums/{id}", albums.Update)
 	mux.HandleFunc("DELETE /api/v1/albums/{id}", albums.Delete)
-	mux.HandleFunc("GET /api/v1/albums", albums.List)
+
+	mux.HandleFunc("POST /api/v1/albums/{id}/copies", copies.Create)
+	mux.HandleFunc("GET /api/v1/albums/{id}/copies", copies.List)
+	mux.HandleFunc("GET /api/v1/albums/{id}/availability", copies.Availability)
+
 	mux.Handle("GET /swagger/", httpSwagger.WrapHandler) // Swagger UI: /swagger/index.html
 	mux.HandleFunc("/", handler.NotFound)                // everything else: JSON 404
 

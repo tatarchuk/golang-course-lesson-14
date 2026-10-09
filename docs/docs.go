@@ -42,9 +42,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "string",
-                        "description": "Exact, case-sensitive genre filter",
-                        "name": "genre",
+                        "type": "integer",
+                        "description": "Only albums of this genre",
+                        "name": "genre_id",
                         "in": "query"
                     }
                 ],
@@ -79,7 +79,7 @@ const docTemplate = `{
                 "summary": "Create an album",
                 "parameters": [
                     {
-                        "description": "Album to create",
+                        "description": "Album to create; genre_id and artist_ids must reference existing rows",
                         "name": "album",
                         "in": "body",
                         "required": true,
@@ -95,8 +95,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/model.Album"
                         }
                     },
+                    "409": {
+                        "description": "An album with the same title and label exists",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
                     "422": {
-                        "description": "Unprocessable Entity",
+                        "description": "validation_error or invalid_reference",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -163,7 +169,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Full replacement; omitted optional fields become null",
+                        "description": "Full replacement; omitted optional fields become null, artist_ids replace the previous artists",
                         "name": "album",
                         "in": "body",
                         "required": true,
@@ -187,6 +193,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -231,6 +243,355 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/albums/{id}/availability": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copies"
+                ],
+                "summary": "Count the copies of an album and how many are available",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Album id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.Availability"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/albums/{id}/copies": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copies"
+                ],
+                "summary": "List the copies of an album",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Album id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Copy"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copies"
+                ],
+                "summary": "Add a physical copy to an album",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Album id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Copy to add; status defaults to available",
+                        "name": "copy",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.CopyInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.Copy"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Album not found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Inventory number already used",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/artists": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "artists"
+                ],
+                "summary": "List artists",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Artist"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "artists"
+                ],
+                "summary": "Create an artist",
+                "parameters": [
+                    {
+                        "description": "Artist to create",
+                        "name": "artist",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.ArtistInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.Artist"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/artists/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "artists"
+                ],
+                "summary": "Get an artist by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Artist id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.Artist"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/genres": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genres"
+                ],
+                "summary": "List genres",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.Genre"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genres"
+                ],
+                "summary": "Create a genre",
+                "parameters": [
+                    {
+                        "description": "Genre to create",
+                        "name": "genre",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.GenreInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/model.Genre"
+                        }
+                    },
+                    "409": {
+                        "description": "A genre with this name exists",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/genres/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "genres"
+                ],
+                "summary": "Get a genre by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Genre id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.Genre"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -258,15 +619,21 @@ const docTemplate = `{
         "model.Album": {
             "type": "object",
             "properties": {
-                "artist": {
-                    "type": "string"
+                "artists": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.Artist"
+                    }
                 },
                 "created_at": {
                     "description": "RFC 3339, set once on creation",
                     "type": "string"
                 },
                 "genre": {
-                    "type": "string"
+                    "$ref": "#/definitions/model.Genre"
+                },
+                "genre_id": {
+                    "type": "integer"
                 },
                 "id": {
                     "type": "integer"
@@ -294,19 +661,21 @@ const docTemplate = `{
         "model.AlbumInput": {
             "type": "object",
             "required": [
-                "artist",
-                "genre",
+                "artist_ids",
+                "genre_id",
                 "label",
                 "title"
             ],
             "properties": {
-                "artist": {
-                    "type": "string",
-                    "example": "Miles Davis"
+                "artist_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 },
-                "genre": {
-                    "type": "string",
-                    "example": "jazz"
+                "genre_id": {
+                    "type": "integer",
+                    "example": 1
                 },
                 "label": {
                     "type": "string",
@@ -325,18 +694,137 @@ const docTemplate = `{
                     "example": "Kind of Blue"
                 }
             }
+        },
+        "model.Artist": {
+            "type": "object",
+            "properties": {
+                "bio": {
+                    "description": "null when not provided",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.ArtistInput": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "bio": {
+                    "type": "string",
+                    "example": "Trumpeter and bandleader."
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Miles Davis"
+                }
+            }
+        },
+        "model.Availability": {
+            "type": "object",
+            "properties": {
+                "album_id": {
+                    "type": "integer"
+                },
+                "available_copies": {
+                    "type": "integer"
+                },
+                "total_copies": {
+                    "type": "integer"
+                }
+            }
+        },
+        "model.Copy": {
+            "type": "object",
+            "properties": {
+                "album_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "inventory_no": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.CopyInput": {
+            "type": "object",
+            "required": [
+                "inventory_no"
+            ],
+            "properties": {
+                "inventory_no": {
+                    "type": "string",
+                    "example": "INV-0001"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "available"
+                }
+            }
+        },
+        "model.Genre": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.GenreInput": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "jazz"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "2.0",
 	Host:             "",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
 	Title:            "Albums API",
-	Description:      "REST API for albums: CRUD, filtering by genre and pagination.",
+	Description:      "REST API for a music album catalogue on PostgreSQL: genres, artists, albums and their physical copies.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

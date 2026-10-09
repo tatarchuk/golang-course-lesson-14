@@ -1,60 +1,64 @@
 package model
 
-import (
-	"errors"
-	"fmt"
-	"strings"
-	"time"
-)
+import "time"
 
 // Album is the stored resource; its JSON tags define the response shape.
-// Optional fields are pointers so that an unset value is encoded as null, never omitted
-// (no omitempty: the contract requires the key to be present). Field comments become
-// descriptions in the generated OpenAPI spec.
+// The genre is a belongs-to relation and the artists a many-to-many relation through
+// album_artists; the repository loads both explicitly. Optional fields are pointers
+// so that an unset value is encoded as null, never omitted (no omitempty: the
+// contract requires the key to be present).
 type Album struct {
-	ID          int64     `json:"id"`
+	ID          int64     `json:"id" gorm:"primaryKey"`
 	Title       string    `json:"title"`
-	Artist      string    `json:"artist"`
 	Label       string    `json:"label"`
-	Genre       string    `json:"genre"`
+	GenreID     int64     `json:"genre_id"`
+	Genre       Genre     `json:"genre" gorm:"foreignKey:GenreID"`
+	Artists     []Artist  `json:"artists" gorm:"many2many:album_artists;"`
 	ReleaseYear *int      `json:"release_year"` // null when not provided
 	Notes       *string   `json:"notes"`        // null when not provided
 	CreatedAt   time.Time `json:"created_at"`   // RFC 3339, set once on creation
 	UpdatedAt   time.Time `json:"updated_at"`   // RFC 3339, changes on every PUT
 }
 
-// AlbumInput is the body of POST and PUT. No id, no timestamps: clients cannot set them.
-// The validate and example tags are read by swag when generating the OpenAPI spec;
-// the actual validation is done by Validate.
+// TableName pins the table name instead of relying on GORM's pluralisation.
+func (Album) TableName() string { return "albums" }
+
+// AlbumInput is the body of POST and PUT /albums. Relations are given by id, so the
+// client can only reference genres and artists that already exist. No id and no
+// timestamps: clients cannot set them. The validate and example tags are read by
+// swag when generating the OpenAPI spec; the actual validation is done by Validate.
 type AlbumInput struct {
 	Title       string  `json:"title" validate:"required" example:"Kind of Blue"`
-	Artist      string  `json:"artist" validate:"required" example:"Miles Davis"`
 	Label       string  `json:"label" validate:"required" example:"Columbia"`
-	Genre       string  `json:"genre" validate:"required" example:"jazz"`
+	GenreID     int64   `json:"genre_id" validate:"required" example:"1"`
+	ArtistIDs   []int64 `json:"artist_ids" validate:"required"`
 	ReleaseYear *int    `json:"release_year" example:"1959"`
 	Notes       *string `json:"notes" example:"Recorded in 1959"`
 }
 
-// ErrValidation marks errors that become a 422 response.
-var ErrValidation = errors.New("validation error")
-
-// Validate checks the required fields. Missing, null, "" and "   " all end up as an empty
-// string after TrimSpace. Wrong JSON types never get here: the decoder rejects them first.
+// Validate checks the required fields and the shape of the references. Whether the
+// referenced genre and artists exist is the repository's job.
 func (in AlbumInput) Validate() error {
-	fields := []struct{ name, value string }{
-		{"title", in.Title},
-		{"artist", in.Artist},
-		{"label", in.Label},
-		{"genre", in.Genre},
+	problems := requiredProblem(field{"title", in.Title}, field{"label", in.Label})
+	if in.GenreID < 1 {
+		problems = append(problems, "genre_id must be a positive integer")
 	}
-	var missing []string
-	for _, f := range fields {
-		if strings.TrimSpace(f.value) == "" {
-			missing = append(missing, f.name)
+	switch {
+	case len(in.ArtistIDs) == 0:
+		problems = append(problems, "artist_ids must contain at least one artist id")
+	default:
+		seen := make(map[int64]bool, len(in.ArtistIDs))
+		for _, id := range in.ArtistIDs {
+			if id < 1 {
+				problems = append(problems, "artist_ids must contain positive integers")
+				break
+			}
+			if seen[id] {
+				problems = append(problems, "artist_ids must not repeat an id")
+				break
+			}
+			seen[id] = true
 		}
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("%w: required fields missing or empty: %s", ErrValidation, strings.Join(missing, ", "))
-	}
-	return nil
+	return validationError(problems)
 }

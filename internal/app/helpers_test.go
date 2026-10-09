@@ -1,0 +1,112 @@
+package app_test
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"homework/internal/app"
+	"homework/internal/repository"
+	"homework/internal/testdb"
+)
+
+// newRouter resets the database and builds the full HTTP handler on top of it.
+func newRouter(t *testing.T) http.Handler {
+	t.Helper()
+	testdb.Reset(t)
+	return app.NewRouter(repository.NewGorm(testdb.DB(t)))
+}
+
+type resp struct {
+	Code   int
+	Header http.Header
+	Body   []byte
+}
+
+func (r resp) String() string { return fmt.Sprintf("%d %s", r.Code, strings.TrimSpace(string(r.Body))) }
+
+// call serves one request; a non-empty body is sent as JSON.
+func call(h http.Handler, method, path, body string) resp {
+	var req *http.Request
+	if body != "" {
+		req = httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return resp{Code: rec.Code, Header: rec.Header(), Body: rec.Body.Bytes()}
+}
+
+// expect asserts the status and, for errors, the error code.
+func expect(t *testing.T, r resp, status int, code string) map[string]any {
+	t.Helper()
+	if r.Code != status {
+		t.Fatalf("expected %d, got %s", status, r)
+	}
+	if status == http.StatusNoContent {
+		return nil
+	}
+	obj := object(t, r)
+	if code != "" {
+		e, _ := obj["error"].(map[string]any)
+		if e["code"] != code || e["message"] == "" {
+			t.Fatalf("expected error code %q, got %s", code, r)
+		}
+	}
+	return obj
+}
+
+func object(t *testing.T, r resp) map[string]any {
+	t.Helper()
+	var obj map[string]any
+	if err := json.Unmarshal(r.Body, &obj); err != nil {
+		t.Fatalf("not a JSON object: %s (%v)", r, err)
+	}
+	return obj
+}
+
+func list(t *testing.T, r resp) []map[string]any {
+	t.Helper()
+	if r.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %s", r)
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(r.Body, &items); err != nil || items == nil {
+		t.Fatalf("not a JSON array: %s (%v)", r, err)
+	}
+	return items
+}
+
+func id(obj map[string]any) int64 { return int64(obj["id"].(float64)) }
+
+// fixtures creates one genre and two artists through the API and returns their ids.
+func fixtures(t *testing.T, h http.Handler) (genre int64, artists []int64) {
+	t.Helper()
+	genre = id(expect(t, call(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 201, ""))
+	for _, name := range []string{"Smoke Artist", "Smoke Artist Two"} {
+		artists = append(artists, id(expect(t, call(h, "POST", "/api/v1/artists", fmt.Sprintf(`{"name":%q}`, name)), 201, "")))
+	}
+	return genre, artists
+}
+
+func albumBody(title string, genre int64, artists ...int64) string {
+	ids := make([]string, len(artists))
+	for i, a := range artists {
+		ids[i] = fmt.Sprint(a)
+	}
+	return fmt.Sprintf(`{"title":%q,"label":"Smoke Label","genre_id":%d,"artist_ids":[%s]}`, title, genre, strings.Join(ids, ","))
+}
+
+func countRows(t *testing.T, table string, where string, args ...any) int64 {
+	t.Helper()
+	var n int64
+	if err := testdb.DB(t).Table(table).Where(where, args...).Count(&n).Error; err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
