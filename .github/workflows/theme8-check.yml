@@ -1,0 +1,432 @@
+name: Theme 8 check
+
+# Put this file into the student's repository as .github/workflows/theme8-check.yml
+# Every check is reported in the job summary (Actions -> run -> Summary) as PASS/FAIL;
+# a step fails at the END if at least one check failed, so one run shows all problems.
+#
+# Adapted for the `albums` variant of the course project (Go module `homework`):
+#   books -> albums, authors -> artists, categories -> genres, book_authors -> album_artists,
+#   category_id -> genre_id, author_ids -> artist_ids, isbn (UNIQUE) -> UNIQUE (title, label).
+#   The router stays net/http (allowed in Theme 7), so the gin dependency check is dropped.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: theme8-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Prepare check helper
+        run: |
+          cat > "$RUNNER_TEMP/check.sh" <<'EOF'
+          FAILED=0
+          header() {
+            { echo ""; echo "### $1"; echo ""; echo "| Result | Check |"; echo "|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          }
+          pass() {
+            echo "| PASS | $1 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "PASS: $1"
+          }
+          fail() {
+            FAILED=1
+            echo "| FAIL | $1 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Check failed::$1"
+            echo "FAIL: $1"
+            if [ -n "${2:-}" ]; then echo "$2" | tail -n 40; fi
+          }
+          check() {
+            local name="$1"; shift
+            local out
+            if out=$("$@" 2>&1); then pass "$name"; else fail "$name" "$out"; fi
+          }
+          EOF
+
+      - name: Structure, formatting, build
+        run: |
+          source "$RUNNER_TEMP/check.sh"
+          header "Theme 8: static checks"
+
+          required=(
+            docker-compose.yml .env.example .gitignore
+            migrations/000001_init_schema.up.sql migrations/000001_init_schema.down.sql
+            migrations/000002_seed_demo_data.up.sql migrations/000002_seed_demo_data.down.sql
+            internal/model/artist.go internal/model/album.go internal/model/genre.go
+            internal/model/copy.go internal/model/user.go
+            internal/repository/errors.go internal/repository/db.go internal/repository/migrate.go
+            internal/repository/album_repository.go internal/repository/artist_repository.go
+            internal/repository/genre_repository.go internal/repository/copy_repository.go
+            internal/handler/errors.go internal/handler/album_handler.go internal/handler/artist_handler.go
+            internal/handler/genre_handler.go internal/handler/copy_handler.go
+            cmd/api/main.go
+          )
+          missing=""
+          for f in "${required[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
+          if [ -z "$missing" ]; then pass "Required files exist"; else fail "Required files exist" "missing:$missing"; fi
+
+          no_root_go() { [ -z "$(ls ./*.go 2>/dev/null)" ]; }
+          check "No .go files in the repository root" no_root_go
+
+          check "Module name is homework" grep -q '^module homework$' go.mod
+          check "go.mod has gorm" grep -q 'gorm.io/gorm' go.mod
+          check "go.mod has the gorm postgres driver" grep -q 'gorm.io/driver/postgres' go.mod
+          check "go.mod has golang-migrate" grep -q 'golang-migrate/migrate' go.mod
+
+          album_no_text_fields() { ! grep -nE '^\s*(Artist|Genre)\s+string' internal/model/album.go; }
+          check "Album model has no plain-text Artist/Genre fields" album_no_text_fields
+          check "Album model uses many2many:album_artists" grep -q 'many2many:album_artists' internal/model/album.go
+
+          gofmt_clean() {
+            local out
+            out=$(gofmt -l .)
+            if [ -n "$out" ]; then echo "Not formatted:"; echo "$out"; return 1; fi
+          }
+          check "gofmt: all files formatted" gofmt_clean
+          check "go vet ./..." go vet ./...
+          check "go build ./..." go build ./...
+
+          tidy_clean() { go mod tidy && git diff --exit-code go.mod go.sum; }
+          check "go mod tidy leaves go.mod/go.sum unchanged" tidy_clean
+
+          no_automigrate() { ! grep -rn 'AutoMigrate' --include=*.go .; }
+          check "No AutoMigrate calls (schema only via migrations)" no_automigrate
+
+          errnotfound_once() { [ "$(grep -rn 'ErrNotFound = ' --include=*.go . | wc -l)" = "1" ]; }
+          check "ErrNotFound is declared exactly once" errnotfound_once
+
+          ascii_only() { ! grep -rnP '[^\x00-\x7F]' --include=*.go .; }
+          check "No non-ASCII characters in .go files" ascii_only
+
+          n1_fixed() { grep -rq 'Preload("Artists")' internal/repository && ! grep -rn 'NAIVE' internal; }
+          check "N+1 fixed: Preload is used and the NAIVE marker is gone" n1_fixed
+
+          tests_exist() { ls internal/model/*_test.go internal/repository/*_test.go internal/handler/*_test.go > /dev/null; }
+          check "Test files exist for model, repository and handler" tests_exist
+
+          env_not_tracked() { grep -qx '\.env' .gitignore && ! git ls-files --error-unmatch .env 2> /dev/null; }
+          check ".env is ignored and not committed" env_not_tracked
+          check ".env.example defines DATABASE_URL" grep -q '^DATABASE_URL=' .env.example
+
+          check "docker-compose.yml is valid" docker compose config -q
+          compose_pg() { grep -q 'postgres' docker-compose.yml && grep -q 'healthcheck' docker-compose.yml; }
+          check "docker-compose.yml has postgres with a healthcheck" compose_pg
+
+          pairs_ok() {
+            for f in migrations/*.up.sql; do
+              [ -f "${f%.up.sql}.down.sql" ] || { echo "no down migration for $f"; return 1; }
+            done
+          }
+          check "Every up migration has a down migration" pairs_ok
+
+          exit $FAILED
+
+  integration:
+    name: Migrations, tests, API smoke test
+    needs: static
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: albums
+          POSTGRES_PASSWORD: albums
+          POSTGRES_DB: albums
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U albums -d albums"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGPASSWORD: albums
+      APP_URL: postgres://albums:albums@localhost:5432/albums?sslmode=disable
+      TEST_URL: postgres://albums:albums@localhost:5432/albums_test?sslmode=disable
+      MIGR_URL: postgres://albums:albums@localhost:5432/albums_migr?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Create extra databases
+        run: |
+          psql -h localhost -U albums -d albums \
+            -c 'CREATE DATABASE albums_test' \
+            -c 'CREATE DATABASE albums_migr'
+
+      - name: Prepare check helper
+        run: |
+          cat > "$RUNNER_TEMP/check.sh" <<'EOF'
+          FAILED=0
+          header() {
+            { echo ""; echo "### $1"; echo ""; echo "| Result | Check |"; echo "|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          }
+          pass() {
+            echo "| PASS | $1 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "PASS: $1"
+          }
+          fail() {
+            FAILED=1
+            echo "| FAIL | $1 |" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Check failed::$1"
+            echo "FAIL: $1"
+            if [ -n "${2:-}" ]; then echo "$2" | tail -n 40; fi
+          }
+          check() {
+            local name="$1"; shift
+            local out
+            if out=$("$@" 2>&1); then pass "$name"; else fail "$name" "$out"; fi
+          }
+          EOF
+
+      - name: Migrations (up, schema, seed, down, up)
+        run: |
+          source "$RUNNER_TEMP/check.sh"
+          header "Theme 8: migrations"
+
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.17.1
+          export PATH="$PATH:$(go env GOPATH)/bin"
+
+          sql() { psql "$MIGR_URL" -v ON_ERROR_STOP=1 -tA -c "$1"; }
+          sql_must_fail() { ! psql "$MIGR_URL" -v ON_ERROR_STOP=1 -c "$1" > /dev/null 2>&1; }
+
+          check "migrate up applies all migrations" migrate -path migrations -database "$MIGR_URL" up
+
+          tables_ok() {
+            [ "$(sql "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('genres','artists','albums','album_artists','copies','users')")" = "6" ]
+          }
+          check "All six tables exist" tables_ok
+
+          seed_albums() { [ "$(sql "SELECT count(*) FROM albums")" -ge 8 ]; }
+          check "Seed: at least 8 albums" seed_albums
+          seed_copies() { [ "$(sql "SELECT count(*) FROM copies")" -ge 20 ]; }
+          check "Seed: at least 20 copies" seed_copies
+          seed_multi_artist() { [ "$(sql "SELECT count(*) FROM (SELECT album_id FROM album_artists GROUP BY album_id HAVING count(*) >= 2) t")" -ge 1 ]; }
+          check "Seed: at least one album has two artists" seed_multi_artist
+          seed_artist_albums() { [ "$(sql "SELECT count(*) FROM (SELECT artist_id FROM album_artists GROUP BY artist_id HAVING count(*) >= 2) t")" -ge 1 ]; }
+          check "Seed: at least one artist has two albums" seed_artist_albums
+
+          bad_status() { sql_must_fail "INSERT INTO copies(album_id, inventory_no, status) VALUES (1, 'X-BAD', 'broken')"; }
+          check "DB rejects an invalid copy status (CHECK)" bad_status
+          bad_role() { sql_must_fail "INSERT INTO users(email, role) VALUES ('x@y.z', 'boss')"; }
+          check "DB rejects an invalid user role (CHECK)" bad_role
+          dup_album() { sql_must_fail "INSERT INTO albums(title, label, genre_id) SELECT title, label, genre_id FROM albums LIMIT 1"; }
+          check "DB rejects a duplicate title + label (UNIQUE)" dup_album
+          bad_fk() { sql_must_fail "INSERT INTO albums(title, label, genre_id) VALUES ('t', 'l', 999999)"; }
+          check "DB rejects an album with a missing genre (FK)" bad_fk
+
+          check "migrate down -all (down migrations work)" migrate -path migrations -database "$MIGR_URL" down -all
+          check "migrate up works again after down" migrate -path migrations -database "$MIGR_URL" up
+
+          exit $FAILED
+
+      - name: Go tests against a real database
+        if: always()
+        run: |
+          source "$RUNNER_TEMP/check.sh"
+          header "Theme 8: go test"
+
+          export TEST_DATABASE_URL="$TEST_URL"
+          run_tests() {
+            set -o pipefail
+            go test ./... -race -covermode=atomic -coverprofile=cover.out -count=1 -v 2>&1 | tee test.log
+          }
+          check "go test ./... -race (with TEST_DATABASE_URL)" run_tests
+
+          no_skips() { ! grep -q -- '--- SKIP' test.log; }
+          check "No test was skipped (database tests really ran)" no_skips
+          enough() { [ "$(grep -c -- '^--- PASS' test.log)" -ge 20 ]; }
+          check "At least 20 top-level tests passed" enough
+
+          if [ -f cover.out ]; then
+            { echo ""; echo "Total coverage: $(go tool cover -func=cover.out | tail -n 1 | awk '{print $NF}')"; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          exit $FAILED
+
+      - name: API smoke test (curl against the running server)
+        if: always()
+        run: |
+          source "$RUNNER_TEMP/check.sh"
+          header "Theme 8: API smoke test"
+
+          build_app() { go build -o bin/api ./cmd/api; }
+          check "go build ./cmd/api" build_app
+
+          DATABASE_URL="$APP_URL" MIGRATIONS_PATH=migrations PORT=8080 ./bin/api > app.log 2>&1 &
+          echo $! > app.pid
+          trap 'kill $(cat app.pid) 2>/dev/null || true' EXIT
+
+          code="000"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/health || true)
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          if [ "$code" != "200" ]; then
+            fail "Server starts and /health answers 200" "$(tail -n 40 app.log)"
+            exit 1
+          fi
+          pass "Server starts and /health answers 200"
+
+          BASE=http://localhost:8080/api/v1
+
+          api() {
+            local m="$1" p="$2" b="${3:-}"
+            if [ -n "$b" ]; then
+              curl -s -o resp.json -w '%{http_code}' -X "$m" "$BASE$p" -H 'Content-Type: application/json' -d "$b"
+            else
+              curl -s -o resp.json -w '%{http_code}' -X "$m" "$BASE$p"
+            fi
+          }
+          http() { # name expected-status method path [body]
+            local name="$1" want="$2"; shift 2
+            local got
+            got=$(api "$@")
+            if [ "$got" = "$want" ]; then pass "$name"; else fail "$name" "expected HTTP $want, got $got: $(head -c 300 resp.json)"; fi
+          }
+          jqis() { # name jq-filter expected-value (reads resp.json)
+            local name="$1" filter="$2" want="$3" got
+            got=$(jq -r "$filter" resp.json 2> /dev/null || echo "invalid json")
+            if [ "$got" = "$want" ]; then pass "$name"; else fail "$name" "expected '$want', got '$got'"; fi
+          }
+
+          # health and theme 7 regressions
+          health_ok() { [ "$(curl -s http://localhost:8080/health | jq -r .status)" = "ok" ]; }
+          check "/health returns {\"status\":\"ok\"}" health_ok
+          swagger_ok() { [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/swagger/index.html)" = "200" ]; }
+          check "Swagger UI is served at /swagger/index.html" swagger_ok
+          cors_ok() {
+            local status
+            status=$(curl -s -D headers.txt -o /dev/null -w '%{http_code}' -X OPTIONS "$BASE/albums" \
+              -H 'Origin: http://example.com' -H 'Access-Control-Request-Method: POST')
+            { [ "$status" = "204" ] || [ "$status" = "200" ]; } && grep -qi '^access-control-allow-origin:' headers.txt
+          }
+          check "CORS preflight is handled" cors_ok
+
+          # genres and artists
+          http "POST /genres creates a genre" 201 POST /genres '{"name":"Smoke Genre"}'
+          GEN=$(jq -r '.id' resp.json)
+          http "Duplicate genre name -> 409" 409 POST /genres '{"name":"Smoke Genre"}'
+          jqis "Error envelope: error.code is conflict" '.error.code' conflict
+          http "POST /genres with an empty name -> 422" 422 POST /genres '{}'
+          http "GET /genres/{id}" 200 GET "/genres/$GEN"
+          http "GET /genres lists genres" 200 GET /genres
+          http "POST /artists creates an artist" 201 POST /artists '{"name":"Smoke Artist"}'
+          ART1=$(jq -r '.id' resp.json)
+          http "POST /artists creates a second artist" 201 POST /artists '{"name":"Smoke Artist Two"}'
+          ART2=$(jq -r '.id' resp.json)
+          http "GET /artists/{id}" 200 GET "/artists/$ART1"
+          http "GET /artists lists artists" 200 GET /artists
+          http "GET /artists/{unknown} -> 404" 404 GET /artists/999999
+
+          # albums
+          ALBUMBODY="{\"title\":\"Smoke Album\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART1]}"
+          http "POST /albums creates an album with relations" 201 POST /albums "$ALBUMBODY"
+          ALBUM=$(jq -r '.id' resp.json)
+          jqis "Created album contains its artist" '.artists | length' 1
+          jqis "Created album contains its genre" '.genre.id' "$GEN"
+          http "Duplicate title + label -> 409" 409 POST /albums "$ALBUMBODY"
+          http "Unknown artist id -> 422" 422 POST /albums "{\"title\":\"Bad Artist\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[999999]}"
+          jqis "Error envelope: error.code is invalid_reference" '.error.code' invalid_reference
+          http "Unknown artist was NOT silently created" 404 GET /artists/999999
+          http "Unknown genre -> 422" 422 POST /albums "{\"title\":\"Bad Genre\",\"label\":\"Smoke Label\",\"genre_id\":999999,\"artist_ids\":[$ART1]}"
+          http "Missing title -> 422" 422 POST /albums '{"label":"Smoke Label"}'
+          jqis "Error envelope: error.code is validation_error" '.error.code' validation_error
+          http "Empty artist_ids -> 422" 422 POST /albums "{\"title\":\"Bad Empty\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[]}"
+          http "GET /albums/{id}" 200 GET "/albums/$ALBUM"
+          jqis "GET /albums/{id} returns artists" '.artists | length' 1
+          http "GET /albums/{unknown} -> 404" 404 GET /albums/999999
+          jqis "Error envelope: error.code is not_found" '.error.code' not_found
+
+          # copies and availability
+          http "POST /albums/{id}/copies creates a copy" 201 POST "/albums/$ALBUM/copies" '{"inventory_no":"SMOKE-1"}'
+          jqis "Copy status defaults to available" '.status' available
+          http "POST second copy" 201 POST "/albums/$ALBUM/copies" '{"inventory_no":"SMOKE-2","status":"available"}'
+          http "POST third copy (lost)" 201 POST "/albums/$ALBUM/copies" '{"inventory_no":"SMOKE-3","status":"lost"}'
+          http "Duplicate inventory number -> 409" 409 POST "/albums/$ALBUM/copies" '{"inventory_no":"SMOKE-1"}'
+          http "Copy for an unknown album -> 404" 404 POST /albums/999999/copies '{"inventory_no":"SMOKE-X"}'
+          http "Invalid copy status -> 422" 422 POST "/albums/$ALBUM/copies" '{"inventory_no":"SMOKE-4","status":"broken"}'
+          http "GET /albums/{id}/copies" 200 GET "/albums/$ALBUM/copies"
+          jqis "The album has 3 copies" 'length' 3
+          http "GET /albums/{id}/availability" 200 GET "/albums/$ALBUM/availability"
+          jqis "availability.album_id" '.album_id' "$ALBUM"
+          jqis "availability.total_copies is 3" '.total_copies' 3
+          jqis "availability.available_copies is 2" '.available_copies' 2
+          http "availability of an unknown album -> 404" 404 GET /albums/999999/availability
+
+          # update
+          http "PUT /albums/{id} updates the album and replaces artists" 200 PUT "/albums/$ALBUM" "{\"title\":\"Smoke Album Updated\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART2]}"
+          jqis "Title was updated" '.title' "Smoke Album Updated"
+          jqis "Artists were replaced (count)" '.artists | length' 1
+          jqis "Artists were replaced (id)" '.artists[0].id' "$ART2"
+          http "PUT /albums/{unknown} -> 404" 404 PUT /albums/999999 "{\"title\":\"X\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART1]}"
+
+          # lists
+          http "GET /albums?genre_id filters by genre" 200 GET "/albums?genre_id=$GEN"
+          jqis "Genre filter returns exactly one album" 'length' 1
+          http "GET /albums?limit=100" 200 GET "/albums?limit=100"
+          jqis "Seeded data is visible (at least 8 albums)" 'length >= 8' true
+          jqis "Every listed album has a genre and artists" '[.[] | select(.genre == null or (.artists | length) == 0)] | length' 0
+          http "Pagination: limit=2 returns 2 albums" 200 GET "/albums?limit=2&page=1"
+          jqis "limit=2 gives exactly 2 items" 'length' 2
+
+          # N+1: the number of SELECTs for the list must not depend on the number of albums
+          count_selects() { grep -c 'SELECT' app.log || true; }
+          measure() {
+            local b a
+            sleep 0.3; b=$(count_selects)
+            curl -s -o /dev/null "$BASE/albums?limit=100"
+            sleep 0.3; a=$(count_selects)
+            echo $((a - b))
+          }
+          Q1=$(measure)
+          for i in 1 2 3 4 5; do
+            api POST /albums "{\"title\":\"Scale $i\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART1,$ART2]}" > /dev/null
+          done
+          Q2=$(measure)
+          if [ "$Q1" -ge 1 ] && [ "$Q1" = "$Q2" ] && [ "$Q1" -le 6 ]; then
+            pass "GET /albums uses a constant number of SELECTs ($Q1) regardless of the number of albums"
+          else
+            fail "GET /albums uses a constant number of SELECTs (no N+1)" "SELECTs before=$Q1, after adding 5 albums=$Q2. If both are 0, the GORM logger must be at Info level (db.go)."
+          fi
+
+          # delete and cascade
+          http "DELETE /albums/{id} -> 204" 204 DELETE "/albums/$ALBUM"
+          http "GET deleted album -> 404" 404 GET "/albums/$ALBUM"
+          cascade_copies() { [ "$(psql "$APP_URL" -tA -c "SELECT count(*) FROM copies WHERE album_id=$ALBUM")" = "0" ]; }
+          check "Deleting an album cascades to its copies" cascade_copies
+          cascade_links() { [ "$(psql "$APP_URL" -tA -c "SELECT count(*) FROM album_artists WHERE album_id=$ALBUM")" = "0" ]; }
+          check "Deleting an album removes its artist links" cascade_links
+          http "DELETE /albums/{unknown} -> 404" 404 DELETE /albums/999999
+
+          if [ "$FAILED" != "0" ]; then echo "---- last server log lines ----"; tail -n 40 app.log; fi
+          exit $FAILED
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theme8-logs
+          path: |
+            app.log
+            test.log
+            cover.out
+          if-no-files-found: ignore

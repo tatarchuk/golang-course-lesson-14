@@ -1,257 +1,318 @@
-# Домашнє завдання: REST API на Go
+# Albums API
 
-Ви реалізуєте REST API для **власної сутності** (ваш варіант). Усі варіанти мають **однаковий контракт**,
-тому правильність перевіряється автоматичними тестами. Ви пишете сервіс самі (з ШІ-помічником чи без),
-але маєте розуміти кожен рядок свого коду: це перевіряється на захисті.
+REST-сервіс обліку музичних альбомів на Go. Проєкт виконано в межах курсу «Go with GenAI»,
+варіант `albums`: ресурс `/api/v1/albums` з обов'язковими полями `title`, `artist`, `label`,
+`genre` (поле фільтра) та необов'язковими `release_year` (ціле) і `notes` (текст).
 
-## 1. Як почати
+Тема 7 (REST API зі сховищем у пам'яті, Swagger, тести) виконана. Тема 8 (PostgreSQL, GORM,
+міграції, виправлення N+1) у роботі: умова, адаптована під варіант `albums`, лежить у
+[albums_lesson8_homework.md](albums_lesson8_homework.md), поточний стан описано в розділі
+[Lesson 8 Report](#lesson-8-report-інтеграція-бд-та-оптимізація-gorm).
 
-1. Створіть свій репозиторій із цього шаблону (кнопка **Use this template** або посилання від викладача).
-2. Відкрийте файл `VARIANT` і запишіть назву **вашого варіанта** (див. таблицю нижче), наприклад `movies`.
-3. Запустіть `go test ./...`. Усі тести спочатку **червоні**, це нормально: ви рухаєтеся до зеленого.
-4. Реалізуйте `NewRouter()` у `internal/app/app.go` й усе, що потрібно для нього.
-5. Після кожного `git push` GitHub Actions запускає перевірку й показує бали на сторінці запуску (розділ *Summary*).
+## Швидкий запуск
 
-> Тести звертаються до вашого API **лише** через `app.NewRouter() http.Handler`. Структуру решти коду, роутер
-> (`net/http`, `gin`, `chi`...) і бібліотеки обираєте ви. Файли `*_test.go`, `scripts/` і `.github/workflows/ci.yml`
-> **не змінюйте**: під час оцінювання використовуються оригінальні версії.
+Потрібен Go 1.22 або новіший. Сторонніх сервісів поки немає: сховище в пам'яті, після перезапуску
+дані зникають, `id` знову починаються з 1.
 
-## 2. Варіанти
+```sh
+# 1. Клонувати репозиторій
+git clone https://github.com/tatarchuk/golang-course-lesson-8.git && cd golang-course-lesson-8
 
-Кожна сутність має **4 обов'язкові рядкові поля**, **одне необов'язкове ціле** і **одне необов'язкове текстове** поле.
-Четверте обов'язкове поле є полем **фільтра**.
+# 2. Запустити сервер (http://localhost:8080)
+go run ./cmd/api
 
-| Варіант (`VARIANT`) | Ресурс у URL | Обов'язкові поля (4-те це фільтр) | Необов'язкове ціле | Необов'язковий текст |
-|---|---|---|---|---|
-| `books` | `books` | `title`, `isbn`, `author`, `category` | `published_year` | `description` |
-| `movies` | `movies` | `title`, `director`, `country`, `genre` | `release_year` | `synopsis` |
-| `tasks` | `tasks` | `title`, `assignee`, `project`, `status` | `priority` | `notes` |
-| `recipes` | `recipes` | `name`, `author`, `difficulty`, `cuisine` | `cook_minutes` | `instructions` |
-| `devices` | `devices` | `name`, `serial`, `manufacturer`, `type` | `warranty_months` | `comment` |
-| `courses` | `courses` | `title`, `teacher`, `level`, `subject` | `hours` | `program` |
-| `albums` | `albums` | `title`, `artist`, `label`, `genre` | `release_year` | `notes` |
-| `pets` | `pets` | `name`, `owner`, `breed`, `species` | `age` | `notes` |
+# Інший порт або зібраний бінарник
+PORT=9090 go run ./cmd/api
+go build -o api ./cmd/api && ./api
+```
 
-Нижче в прикладах використано варіант `books`. Підставте своє.
+Перевірка: `curl -s localhost:8080/health` → `{"status":"ok"}`. Кожен запит логується на сервері як
+`METHOD /path -> status (duration)`.
 
-## 3. Контракт API
+> **TODO (Тема 8):** після інтеграції PostgreSQL запуск виглядатиме так: `cp .env.example .env`,
+> `docker compose up -d`, `migrate -path migrations -database "$DATABASE_URL" up`, а сервер
+> читатиме `DATABASE_URL`, `MIGRATIONS_PATH` і `PORT` (саме так його запускає CI).
 
-Усі відповіді (крім `204`) мають `Content-Type: application/json`. Ключі JSON пишуться в `snake_case`.
+### Тести та перевірки
 
-| Метод і шлях | Успіх | Помилки |
-|---|---|---|
-| `GET /health` | `200` `{"status":"ok"}` | |
-| `POST /api/v1/books` | `201` + створений ресурс | `422` |
-| `GET /api/v1/books` | `200` + масив | `400` (`invalid_pagination`) |
-| `GET /api/v1/books/{id}` | `200` + ресурс | `400` (`invalid_id`), `404` |
-| `PUT /api/v1/books/{id}` | `200` + збережений ресурс | `400`, `422`, `404` |
-| `DELETE /api/v1/books/{id}` | `204` без тіла | `400`, `404` |
+```sh
+go test -race -count=1 ./...                 # усі тести
+go test ./internal/app -run TestStage4 -v    # один етап Теми 7
+gofmt -l .                                   # має нічого не вивести
+go vet ./...
+```
 
-Невідомий маршрут дає `404`, непідтримуваний метод (наприклад `PATCH`) дає будь-який `4xx`.
+Окрім офіційних тестів етапів 1–5 Теми 7, є власні: валідація моделі та `null` у JSON; сховище
+(сортування, фільтр, пагінація, невикористання `id`, паралельні створення); парсинг `id` і
+`page`/`limit`; формат помилок; middleware (паніка → 500, CORS, логування); граничні випадки
+контракту через `NewRouter()`.
+
+CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml)) перевіряє вже вимоги
+Теми 8: структуру файлів, `gofmt`/`go vet`/`go build`, міграції на PostgreSQL, тести з реальною БД
+та smoke-тест API. Він залишатиметься червоним, доки Тема 8 не завершена.
+
+### Документація API
+
+- Swagger UI із запуском запитів з браузера: <http://localhost:8080/swagger/index.html>.
+- Специфікація OpenAPI: [docs/swagger.yaml](docs/swagger.yaml), [docs/swagger.json](docs/swagger.json).
+- Runbook із `curl`-запитами на всі випадки контракту та очікуваними відповідями: [docs/CURL.md](docs/CURL.md).
+
+Специфікацію згенеровано утилітою [swag](https://github.com/swaggo/swag) з анотацій у `cmd/api/main.go`
+та `internal/handler/album.go`. Після зміни анотацій, обробників чи моделі:
+
+```sh
+go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/api/main.go -o docs -ot go,yaml,json --parseInternal
+```
+
+## API (поточний контракт Теми 7)
 
 ### Ресурс
 
 ```json
 {
   "id": 1,
-  "title": "The Go Programming Language",
-  "isbn": "9780134190440",
-  "author": "Donovan, Kernighan",
-  "category": "programming",
-  "published_year": 2015,
-  "description": null,
-  "created_at": "2026-10-05T12:00:00.123456Z",
-  "updated_at": "2026-10-05T12:00:00.123456Z"
+  "title": "Kind of Blue",
+  "artist": "Miles Davis",
+  "label": "Columbia",
+  "genre": "jazz",
+  "release_year": 1959,
+  "notes": null,
+  "created_at": "2026-10-06T10:30:01.236249Z",
+  "updated_at": "2026-10-06T10:30:01.236249Z"
 }
 ```
 
-- `id`: додатне ціле, починається з `1`, зростає на 1, **ніколи не використовується повторно** після видалення.
-- Необов'язкові поля **завжди присутні** у відповіді, `null`, якщо не були задані.
-- `created_at` і `updated_at`: час у форматі RFC 3339. Створення виставляє обидва. `PUT` змінює лише `updated_at`.
+| Поле | Тип | Обов'язкове | Примітка |
+|---|---|---|---|
+| `id` | ціле | — | видає сервер, починається з 1, ніколи не повторюється |
+| `title`, `artist`, `label` | рядок | так | не порожні й не лише з пробілів |
+| `genre` | рядок | так | поле фільтра у списку |
+| `release_year` | ціле | ні | `null`, якщо не задано |
+| `notes` | рядок | ні | `null`, якщо не задано |
+| `created_at`, `updated_at` | RFC 3339 | — | видає сервер; `PUT` змінює лише `updated_at` |
 
-### Валідація (`422`, код `validation_error`)
+### Ендпоінти
 
-- Обов'язкове поле відсутнє, `null`, не рядок, порожнє або складається лише з пробілів.
-- Необов'язкове поле має хибний тип (рядок замість числа, дробове число замість цілого, число замість тексту).
-- Тіло запиту не є коректним JSON-об'єктом (зіпсований JSON, порожнє тіло, масив).
-
-### Ідентифікатор
-
-`{id}` має бути цілим числом від `0` до `4294967295` (`uint32`). Інакше (`abc`, `-1`, `1.5`, завелике число)
-це `400` з кодом `invalid_id`. Коректний, але неіснуючий `id` це `404` з кодом `not_found`.
-Для `PUT` порядок перевірок такий: **спочатку `id` (400), потім тіло (422), потім існування (404)**.
-
-### `PUT`: повна заміна
-
-Тіло такого ж формату, як при створенні. Обов'язкові поля замінюються, **необов'язкові, яких немає в тілі, стають
-`null`**. Відповідь містить збережений ресурс (з тим самим `id` і `created_at`). Запит, відхилений валідацією,
-нічого не змінює.
-
-### Список
-
-`GET /api/v1/books?page=1&limit=10&category=programming`
-
-- Порожня колекція повертається як `[]`, а не `null`.
-- Порядок: за `id` за зростанням, **завжди однаковий**.
-- `page` (за замовчуванням `1`) і `limit` (за замовчуванням `10`) мають бути цілими числами `>= 1`, інакше
-  `400` з кодом `invalid_pagination`. Якщо `limit > 100`, використовується `100`. Сторінка за межами даних дає `[]`.
-- Фільтр: параметр запиту має **ту саму назву, що й четверте обов'язкове поле** (`category`, `genre`, `status`...).
-  Збіг точний і чутливий до регістру. Порожнє значення (`?category=`) означає «без фільтра».
-  Фільтр працює разом із пагінацією.
-- Дуже великі значення (`page=9223372036854775807`) не повинні призводити до паніки чи `500`.
-
-### Формат помилки
-
-```json
-{ "error": { "code": "not_found", "message": "Book not found" } }
-```
-
-Коди: `invalid_id`, `invalid_pagination`, `validation_error`, `not_found`, `internal_server_error`.
-`message` це непорожній рядок. Відповідь **не повинна розкривати внутрішні деталі** (текст паніки, stack trace,
-імена файлів). Паніка в обробнику перетворюється на `500` з кодом `internal_server_error`, а подробиці йдуть у лог.
-
-### CORS, конкурентність, стан
-
-- Кожна відповідь має заголовок `Access-Control-Allow-Origin`. Запит `OPTIONS` дає `204` із
-  `Access-Control-Allow-Methods` (зі списком методів, зокрема `POST`).
-- Сервіс безпечний для паралельних запитів (перевіряється з `go test -race`).
-- Кожен виклик `NewRouter()` створює **нове порожнє сховище** (без глобальних змінних зі станом).
-
-## 4. Етапи (рекомендований порядок)
-
-| Етап | Тести | Що робимо |
+| Метод і шлях | Успіх | Помилки |
 |---|---|---|
-| 1 | `TestStage1_*` | каркас, `/health`, створення й отримання одного ресурсу |
-| 2 | `TestStage2_*` | валідація й помилки (`400`, `404`, `422`) |
-| 3 | `TestStage3_*` | `PUT`, `DELETE`, ідентифікатори, час |
-| 4 | `TestStage4_*` | список, сортування, пагінація, фільтр |
-| 5 | `TestStage5_*` | CORS і конкурентність |
+| `GET /health` | `200` `{"status":"ok"}` | |
+| `POST /api/v1/albums` | `201` + створений ресурс | `422` |
+| `GET /api/v1/albums` | `200` + масив | `400` `invalid_pagination` |
+| `GET /api/v1/albums/{id}` | `200` + ресурс | `400` `invalid_id`, `404` |
+| `PUT /api/v1/albums/{id}` | `200` + збережений ресурс | `400`, `422`, `404` |
+| `DELETE /api/v1/albums/{id}` | `204` без тіла | `400`, `404` |
+| `GET /swagger/` | Swagger UI | |
 
-Запуск одного етапу: `go test ./internal/app -run TestStage2 -v`. Повна перевірка: `go test -race ./...`.
-Окрім видимих тестів, є **приховані** (граничні випадки з цього опису), які запускає викладач.
+- **Список:** `GET /api/v1/albums?page=1&limit=10&genre=jazz`. Порядок за `id`; `page` і `limit`
+  типово 1 і 10, мають бути цілими `>= 1`, `limit` понад 100 обрізається до 100; фільтр `genre` —
+  точний збіг, чутливий до регістру, порожнє значення означає «без фільтра». Дуже великі значення
+  не дають паніки чи `500`.
+- **`PUT` — повна заміна:** необов'язкові поля, яких немає в тілі, стають `null`. Порядок перевірок:
+  `id` (400) → тіло (422) → існування (404); відхилений запит нічого не змінює.
+- **Валідація (`422`):** відсутні, `null`, порожні або пробільні обов'язкові поля; хибний тип
+  необов'язкового поля; тіло, що не є JSON-об'єктом.
+- **`{id}`** — ціле від 0 до 4294967295 (`uint32`), інакше `400` `invalid_id`; коректний, але
+  неіснуючий — `404` `not_found`.
+- **Помилки** мають єдиний формат `{"error":{"code":"…","message":"…"}}` без внутрішніх деталей.
+  Коди: `invalid_id`, `invalid_pagination`, `validation_error`, `not_found`, `internal_server_error`.
+  Невідомий маршрут і непідтримуваний метод теж дають JSON `404`.
+- **CORS:** кожна відповідь має `Access-Control-Allow-Origin: *`; `OPTIONS` → `204` зі списком методів.
 
-## 5. Рекомендована структура
-
-```
-cmd/api/main.go              запуск сервера (готовий)
-internal/app/app.go          NewRouter(): збирає все докупи
-internal/model/              структури ресурсу і запитів
-internal/repository/         інтерфейс сховища + реалізація в пам'яті (з мʼютексом!)
-internal/handler/            HTTP-обробники
-internal/middleware/         логування, відновлення після паніки, CORS
-```
-
-Типові помилки, на які варто звернути увагу (їх регулярно допускає згенерований код): випадковий порядок
-елементів при обході `map`, повернення вказівників на внутрішні об'єкти сховища (гонка даних), `panic` при від'ємних
-межах зрізу в пагінації, відсутній час створення, відповідь `PUT` без `id`, розкриття тексту паніки клієнту.
-
-## 6. Оцінювання (100 балів)
-
-| Частина | Бали |
-|---|---|
-| Видимі автотести (етапи 1-5) | 40 |
-| Приховані автотести | 20 |
-| `gofmt` і `go vet` без зауважень | 5 |
-| Якість коду: шари, інтерфейс сховища, README, Swagger, історія комітів | 15 |
-| Захист (пояснити код, змінити вимогу наживо) | 20 |
-
-Автоматична перевірка у вашому репозиторії показує видимі тести та `gofmt`/`vet` (до 45 балів).
-
-## 7. Здача
-
-Репозиторій із коректним `VARIANT`, зеленим CI і короткою секцією в цьому README: як запустити, що реалізовано,
-які рішення ви прийняли. Дедлайн і форма захисту: за вказівкою викладача.
-
----
-
-## 8. Реалізація: варіант `albums`
-
-Ресурс `/api/v1/albums`. Обов'язкові поля: `title`, `artist`, `label`, `genre` (поле фільтра).
-Необов'язкові: `release_year` (ціле), `notes` (текст).
-
-### Як запустити
-
-```sh
-go run ./cmd/api                      # http://localhost:8080
-PORT=9090 go run ./cmd/api            # інший порт
-go build -o api ./cmd/api && ./api    # або зібрати бінарник
-```
-
-Перевірка: `curl -s localhost:8080/health` → `{"status":"ok"}`. Сховище в пам'яті: після перезапуску
-дані зникають, `id` знову починаються з 1.
-
-**Runbook** з готовими `curl`-запитами на всі випадки контракту (успішні, помилкові, CORS,
-паралельні) та очікуваними відповідями: [docs/CURL.md](docs/CURL.md).
-
-### Документація API (OpenAPI / Swagger)
-
-- Swagger UI із запуском запитів з браузера: <http://localhost:8080/swagger/index.html>.
-- Специфікація: [docs/swagger.yaml](docs/swagger.yaml), [docs/swagger.json](docs/swagger.json).
-- Згенеровано утилітою [swag](https://github.com/swaggo/swag) з анотацій у коментарях до `main`
-  та до обробників у `internal/handler/album.go`. Після зміни анотацій, обробників чи моделі:
-
-  ```sh
-  go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/api/main.go -o docs -ot go,yaml,json --parseInternal
-  ```
-
-### Тести
-
-```sh
-go test -race -count=1 ./...                 # усе, як у CI
-go test ./internal/app -run TestStage4 -v    # один етап
-```
-
-Окрім офіційних тестів етапів 1–5, є власні: валідація моделі та `null` у JSON; сховище
-(сортування, фільтр, пагінація, невикористання `id`, паралельні створення); парсинг `id` і
-`page`/`limit`; формат помилок; middleware (паніка → 500, CORS, логування); граничні випадки
-контракту через `NewRouter()`.
-
-### Що реалізовано
-
-- `GET /health`; для `/api/v1/albums`: `POST` → 201, `GET` списку → 200, `GET`/`PUT`/`DELETE`
-  за `{id}` → 200/200/204.
-- Валідація тіла (422 `validation_error`): відсутні, порожні, `null` або пробільні обов'язкові
-  поля; хибні типи необов'язкових; тіло, що не є JSON-об'єктом.
-- `{id}` у діапазоні `uint32`, інакше 400 `invalid_id`; неіснуючий `id` → 404 `not_found`.
-  Для `PUT` порядок перевірок: `id` → тіло → існування; відхилений запит нічого не змінює.
-- Список: порядок за `id`; `page`/`limit` (типово 1/10, `limit` понад 100 обрізається до 100,
-  нечислові або менші за 1 → 400 `invalid_pagination`); фільтр `?genre=` (точний збіг, порожнє
-  значення — без фільтра) працює разом із пагінацією; дуже великі `page`/`limit` не дають 500.
-- Єдиний формат помилок `{"error":{"code":"…","message":"…"}}`; усі відповіді, крім 204, мають
-  `Content-Type: application/json`; невідомий маршрут і непідтримуваний метод → JSON 404.
-- CORS (`Access-Control-Allow-Origin: *`, `OPTIONS` → 204 зі списком методів), відновлення після
-  паніки (500 `internal_server_error`, подробиці лише в лог), логування кожного запиту.
-- Кожен виклик `NewRouter()` створює нове порожнє сховище; `go test -race ./...` чистий.
-
-### Структура та прийняті рішення
+## Структура проєкту та прийняті рішення
 
 ```
-cmd/api/main.go           запуск сервера
-internal/app/app.go       NewRouter(): сховище → обробники → ServeMux → ланцюжок middleware
-internal/model/           Album (відповідь), AlbumInput (тіло запиту), Validate()
-internal/repository/      інтерфейс AlbumRepository + MemoryRepository (RWMutex + map)
-internal/handler/         HTTP-обробники, парсинг параметрів, запис JSON і помилок
-internal/middleware/      Logging, Recover, CORS
-docs/                     OpenAPI (згенеровано swag) і runbook з curl
+cmd/api/main.go                      запуск сервера (порт із PORT, типово 8080)
+internal/app/app.go                  NewRouter(): сховище → обробники → ServeMux → ланцюжок middleware
+internal/model/                      Album (відповідь), AlbumInput (тіло запиту), Validate()
+internal/repository/                 інтерфейс AlbumRepository + MemoryRepository (RWMutex + map)
+internal/handler/                    HTTP-обробники, парсинг параметрів, запис JSON і помилок
+internal/middleware/                 Logging, Recover, CORS
+docs/                                OpenAPI (згенеровано swag) і runbook з curl
+albums_lesson8_homework.md           умова Теми 8, адаптована під варіант albums
+db_migration_prompt.md               промпт для генерації SQL-міграцій (Тема 8, частина 1)
+.github/workflows/theme8-check.yml   CI Теми 8, адаптований під варіант albums
 ```
 
 - **Роутер** — стандартний `net/http` із шаблонами Go 1.22 (`"GET /api/v1/albums/{id}"`,
-  `r.PathValue`), без сторонніх фреймворків; залежності лише для Swagger UI.
-- **Шари.** Обробники залежать лише від інтерфейсу `AlbumRepository`, тож сховище можна
-  замінити на БД, не торкаючись HTTP-коду.
-- **Сховище** тримає значення, а не вказівники: читачі отримують копії, тому `PUT` і `GET` не
-  ділять одну пам'ять; `sync.RWMutex` пускає читачів паралельно; `nextID` лише зростає, тому
-  `id` ніколи не повторюються.
-- **Необов'язкові поля** — вказівники (`*int`, `*string`) без `omitempty`: `nil` серіалізується
-  як `null`, ключ завжди присутній у відповіді.
-- **Два типи.** `AlbumInput` не має `id` і часу, тому клієнт не може їх задати; `PUT` повністю
-  замінює поля з `AlbumInput`, тому пропущені необов'язкові стають `null`.
-- **Декодування** через `json.Unmarshal` усього тіла: відхиляє порожнє тіло, масив, сміття
-  після об'єкта та хибні типи; повідомлення про помилки не розкривають внутрішні Go-типи.
-- **Ідентифікатор** парситься `strconv.ParseUint(s, 10, 32)` — рівно діапазон контракту.
-  `page`/`limit` — `strconv.ParseInt`; переповнення трактується як «дуже велике число»
-  (порожня сторінка або обрізання `limit`), а не як помилка сервера.
-- **Пагінація** без переповнення цілих: перевірка `page-1 > len/limit` перед обчисленням зсуву.
-- **Порядок middleware** `Logging(Recover(CORS(mux)))`: лог бачить навіть 500 від `Recover`,
-  а заголовки CORS уже виставлені до того, як обробник міг запанікувати.
+  `r.PathValue`); сторонні залежності лише для Swagger UI.
+- **Шари.** Обробники залежать лише від інтерфейсу `AlbumRepository`, тож сховище в пам'яті можна
+  замінити на PostgreSQL, не торкаючись HTTP-коду. Саме це є точкою інтеграції БД у Темі 8.
+- **Сховище** тримає значення, а не вказівники: читачі отримують копії, тому `PUT` і `GET` не ділять
+  одну пам'ять; `sync.RWMutex` пускає читачів паралельно; `nextID` лише зростає, тому `id` ніколи
+  не повторюються. Кожен виклик `NewRouter()` створює нове порожнє сховище, без глобального стану.
+- **Два типи.** `AlbumInput` не має `id` і часу, тому клієнт не може їх задати. Необов'язкові поля —
+  вказівники (`*int`, `*string`) без `omitempty`: `nil` серіалізується як `null`, ключ завжди присутній.
+- **Декодування** через `json.Unmarshal` усього тіла (ліміт 1 MiB): відхиляє порожнє тіло, масив,
+  сміття після об'єкта та хибні типи; повідомлення не розкривають внутрішні Go-типи.
+- **Параметри.** `{id}` парситься `strconv.ParseUint(s, 10, 32)` — рівно діапазон контракту;
+  `page`/`limit` — `strconv.ParseInt`, переповнення трактується як «дуже велике число», а не як
+  помилка сервера. Пагінація без переповнення цілих: перевірка `page-1 > len/limit` перед обчисленням
+  зсуву.
+- **Порядок middleware** `Logging(Recover(CORS(mux)))`: лог бачить навіть 500 від `Recover`, а
+  заголовки CORS виставлені до того, як обробник міг запанікувати.
 - **Час** — `time.Now().UTC()`, у відповіді RFC 3339 із суфіксом `Z`.
+
+## Lesson 8 Report: інтеграція БД та оптимізація GORM
+
+Умова: [albums_lesson8_homework.md](albums_lesson8_homework.md). Стан виконання:
+
+| Частина | Що потрібно | Стан |
+|---|---|---|
+| 1. Промпт-інжиніринг | промпт для міграцій; `migrations/000001_init_schema.*` і `000002_seed_demo_data.*`; `migrate up` | промпт готовий, міграції ще не згенеровано |
+| 2. AI-агент | моделі `Album`, `Artist`, `Genre`, `Copy`, `User`; GORM-репозиторії та обробники; `docker-compose.yml`, `.env.example`, підключення в `main.go` | не розпочато |
+| 3. Вручну | логер GORM `Info`, seed, логи «до», `Preload`, логи «після», latency | не розпочато |
+
+### Частина 1. Промпт для генерації міграцій
+
+Промпт призначений для генерації пари up/down міграцій у форматі
+[golang-migrate](https://github.com/golang-migrate/migrate) із Go-структур проєкту. На вхід подаються
+структури з `internal/model` (зараз лише `Album`; після нормалізації також `Artist`, `Genre`, `Copy`
+та `User`), результат — `migrations/000001_init_schema.up.sql` і `.down.sql`.
+Файл промпту: [db_migration_prompt.md](db_migration_prompt.md).
+
+Ключові вимоги, закладені в промпт:
+
+- первинні ключі `BIGSERIAL`; усі колонки `NOT NULL`, крім тих, що відповідають вказівникам або
+  необов'язковим полям структури;
+- `created_at` і `updated_at` типу `TIMESTAMP NOT NULL DEFAULT now()` у кожній таблиці;
+- іменовані зовнішні ключі (`CONSTRAINT fk_…`) з `ON DELETE RESTRICT` за замовчуванням; каскад лише
+  з поясненням, чому він доречний;
+- окремий індекс на кожну FK-колонку з іменуванням `idx_{table}_{column}`;
+- `CHECK`-обмеження для полів із фіксованим набором значень;
+- ідемпотентність: `CREATE TABLE IF NOT EXISTS` та `DROP TABLE IF EXISTS`;
+- down-міграція повністю відкочує up-міграцію, видаляючи об'єкти у зворотному порядку створення;
+- на виході лише два SQL-блоки без пояснень.
+
+<details>
+<summary>Повний текст промпту</summary>
+
+```text
+Act as a senior Go and PostgreSQL database engineer.
+Your task is to generate a highly robust and production-ready up/down SQL migration pair (using golang-migrate format) based on the following Go struct(s):
+
+---
+[INSERT_YOUR_GO_STRUCTS_HERE]
+---
+
+Please generate two separate migration files:
+1. `{{VERSION}}_{{NAME}}.up.sql`
+2. `{{VERSION}}_{{NAME}}.down.sql`
+
+Strict Database Design & Constraint Requirements:
+1. Primary Keys: Use `BIGSERIAL` (autoincrementing 64-bit integer) for IDs.
+2. Nullability: Every column must be `NOT NULL` by default. If a field in the Go struct is a pointer (e.g., *string, *int) or is explicitly optional, map it to a nullable database column.
+3. Timestamps: Include `created_at TIMESTAMP NOT NULL DEFAULT now()` and `updated_at TIMESTAMP NOT NULL DEFAULT now()` on every created table.
+4. Foreign Keys (FK):
+    - Every foreign key must have an explicit, named constraint (e.g., `CONSTRAINT fk_albums_genre FOREIGN KEY...`).
+    - Use `ON DELETE RESTRICT` as the default safety behavior for FKs to prevent accidental data loss, unless cascade deletion is explicitly reasonable (state why).
+5. Performance Indexing:
+    - Explicitly write SQL to create individual indexes on all Foreign Key columns.
+    - Systematic naming: `idx_{table}_{column}` (e.g., `idx_albums_genre_id`).
+6. Data Integrity: Add `CHECK` constraints where fields have a restricted set of valid string options (e.g., statuses, priority ranks).
+7. Idempotency: Use `CREATE TABLE IF NOT EXISTS` for table generation, and `DROP TABLE IF EXISTS` for rollbacks.
+8. Down Migration Rollback: The `down.sql` must completely and cleanly revert the `up.sql`. Ensure you drop foreign keys, indexes, and tables in the EXACT reverse order of their creation to avoid dependency locks.
+
+Output Format:
+Provide only two clean, copy-pasteable SQL code blocks (one for UP, one for DOWN) without conversational fluff.
+```
+
+</details>
+
+> **TODO (Тема 8):** згенерувати міграції, перевірити `.down.sql` (зворотний порядок видалення),
+> додати `000002_seed_demo_data.*` (щонайменше 8 альбомів, 20 примірників, альбом із двома
+> виконавцями, виконавець із двома альбомами) і застосувати `migrate up`.
+
+### Частина 2. Цільова схема та API
+
+Поточна реалізація тримає одну сутність `Album` у пам'яті, де `artist` і `genre` — текстові поля.
+Цільова схема Теми 8 за умовою та перевірками CI (ще не реалізована):
+
+```mermaid
+erDiagram
+    genres ||--o{ albums : "genre_id, RESTRICT"
+    albums ||--o{ album_artists : "CASCADE"
+    artists ||--o{ album_artists : "RESTRICT"
+    albums ||--o{ copies : "CASCADE"
+
+    genres {
+        bigint id PK
+        text name UK
+    }
+    artists {
+        bigint id PK
+        text name
+        text bio "nullable"
+    }
+    albums {
+        bigint id PK
+        text title "UNIQUE разом із label"
+        text label
+        bigint genre_id FK
+        int release_year "nullable"
+        text notes "nullable"
+    }
+    album_artists {
+        bigint album_id PK, FK
+        bigint artist_id PK, FK
+    }
+    copies {
+        bigint id PK
+        bigint album_id FK
+        text inventory_no UK
+        text status "CHECK: available, lost, ..."
+    }
+    users {
+        bigint id PK
+        text email UK
+        text role "CHECK"
+    }
+```
+
+Усі таблиці мають `created_at` і `updated_at` (`TIMESTAMP NOT NULL DEFAULT now()`), на кожній
+FK-колонці є індекс `idx_{table}_{column}`.
+
+Цільовий контракт API (`/api/v1`), який перевіряє smoke-тест CI:
+
+| Запит | Відповідь |
+|---|---|
+| `POST /genres` `{"name"}`; `GET /genres`, `GET /genres/{id}` | `201`; дубль імені → `409` `conflict`; порожнє ім'я → `422`; невідомий `id` → `404` |
+| `POST /artists` `{"name"}`; `GET /artists`, `GET /artists/{id}` | `201`; невідомий `id` → `404` |
+| `POST /albums` `{"title","label","genre_id","artist_ids"}` (+ `release_year`, `notes`) | `201` із вкладеними `genre` та `artists`; дубль `title`+`label` → `409`; невідомий `genre_id`/`artist_id` → `422` `invalid_reference`; відсутній `title` або порожній `artist_ids` → `422` `validation_error` |
+| `GET /albums?genre_id=&page=&limit=`; `GET /albums/{id}` | `200`; невідомий `id` → `404` `not_found` |
+| `PUT /albums/{id}` (те саме тіло) | `200`, список виконавців замінюється; `404` |
+| `DELETE /albums/{id}` | `204`; каскадом видаляє `copies` та `album_artists`; `404` |
+| `POST /albums/{id}/copies` `{"inventory_no"}` (+ `status`); `GET /albums/{id}/copies` | `201`, `status` типово `available`; дубль `inventory_no` → `409`; хибний `status` → `422`; невідомий альбом → `404` |
+| `GET /albums/{id}/availability` | `200` `{"album_id","total_copies","available_copies"}`; `404` |
+
+> **TODO (Тема 8):** оновити моделі (`Genre`, `Artists []Artist` з тегом `many2many:album_artists`),
+> реалізувати GORM-репозиторії та обробники для `albums`, `artists`, `genres`, `copies`, додати
+> `docker-compose.yml`, `.env.example`, підключення та пул з'єднань у `cmd/api/main.go`. Офіційні
+> тести Теми 7 в `internal/app` після зміни контракту потрібно оновити або замінити тестами Теми 8.
+
+### Частина 3. Докази виправлення N+1
+
+Поточне сховище в пам'яті виконує один прохід по `map` і сортування, тому проблеми N+1 ще немає.
+Вона з'явиться разом із GORM, якщо `List` довантажуватиме зв'язки в циклі: 1 запит на список +
+N запитів до `artists` + N до `genres`. Виправлення — `.Preload("Artists").Preload("Genre")` у
+методі `List`, після чого кількість запитів стала (CI очікує від 1 до 6 `SELECT` незалежно від
+кількості альбомів).
+
+Логи GORM до виправлення (`logger.Info`, `GET /api/v1/albums`):
+
+```text
+TODO: вставити фрагмент логу з повторюваними SELECT ... FROM "artists" / "genres" для кожного альбому
+```
+
+Логи після виправлення:
+
+```text
+TODO: вставити фрагмент логу з Preload: SELECT ... WHERE "album_id" IN (...) та "id" IN (...)
+```
+
+| Показник (`GET /api/v1/albums`, тестовий набір) | До (N+1) | Після (`Preload`) |
+|---|---|---|
+| Кількість SQL-запитів | — | — |
+| Середній час відповіді, мс | — | — |
+
+> **TODO (Тема 8):** заповнити логи й таблицю реальними вимірами (наприклад, `curl -w '%{time_total}'`
+> у циклі або `hey`/`ab` на 50–100 запитів).
