@@ -1,4 +1,4 @@
-# Local stack for Theme 8: PostgreSQL 16 (the API service is added in the next step).
+# Local stack for Theme 8: PostgreSQL 16 plus the API built from this repository.
 # Values default to the ones in .env.example, so `docker compose config` works without a .env file.
 services:
   postgres:
@@ -17,6 +17,20 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      # Inside the compose network the database host is the service name, not localhost.
+      DATABASE_URL: postgres://${POSTGRES_USER:-albums}:${POSTGRES_PASSWORD:-albums}@postgres:5432/${POSTGRES_DB:-albums}?sslmode=disable
+      MIGRATIONS_PATH: /app/migrations
+      PORT: "8080"
+      DB_LOG_LEVEL: ${DB_LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

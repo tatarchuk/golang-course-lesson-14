@@ -1,0 +1,9 @@
+.git
+.github
+.idea
+.superpowers
+bin
+api
+*.out
+*.log
+.env
