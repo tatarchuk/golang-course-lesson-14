@@ -8,3 +8,6 @@ result.json
 .idea/
 .vscode/
 golang-course-lesson-7.iml
+
+# superpowers plan workspace (scratch)
+.superpowers/

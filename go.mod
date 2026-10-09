@@ -1,6 +1,6 @@
 module homework
 
-go 1.22
+go 1.25.11
 
 require (
 	github.com/swaggo/http-swagger/v2 v2.0.2
