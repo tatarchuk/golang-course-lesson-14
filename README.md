@@ -32,6 +32,9 @@ docker compose down                                # зупинити; дані 
 
 Те саме через `make up`, `make logs`, `make down` (усі цілі: `make` без аргументів показує Makefile).
 
+Скриншоти працюючого стека: [Swagger UI з виконаним `GET /api/v1/albums` і відповіддю 200](docs/screenshots/swagger-get-albums-200.jpg)
+та [огляд API у Swagger UI](docs/screenshots/swagger-overview.jpg).
+
 ### Запуск на хості
 
 Потрібен Go 1.25.11 або новіший (версія з `go.mod`). База береться з compose, сервер запускається
