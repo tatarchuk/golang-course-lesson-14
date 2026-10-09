@@ -11,3 +11,9 @@ golang-course-lesson-7.iml
 
 # superpowers plan workspace (scratch)
 .superpowers/
+
+# local configuration and run artifacts
+.env
+bin/
+app.log
+test.log

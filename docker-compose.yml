@@ -1,0 +1,22 @@
+# Local stack for Theme 8: PostgreSQL 16 (the API service is added in the next step).
+# Values default to the ones in .env.example, so `docker compose config` works without a .env file.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-albums}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-albums}
+      POSTGRES_DB: ${POSTGRES_DB:-albums}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-albums} -d ${POSTGRES_DB:-albums}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
