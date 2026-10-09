@@ -1,156 +1,205 @@
 # Albums API
 
-REST-сервіс обліку музичних альбомів на Go. Проєкт виконано в межах курсу «Go with GenAI»,
-варіант `albums`: ресурс `/api/v1/albums` з обов'язковими полями `title`, `artist`, `label`,
-`genre` (поле фільтра) та необов'язковими `release_year` (ціле) і `notes` (текст).
+REST-сервіс обліку музичних альбомів на Go з PostgreSQL. Проєкт виконано в межах курсу
+«Go with GenAI», варіант `albums`. Тема 7 дала REST API зі сховищем у пам'яті; Тема 8 переводить
+його на PostgreSQL через GORM і golang-migrate, нормалізує схему (жанри, виконавці, примірники),
+запускає все через Docker Compose і документує діагностику проблеми N+1.
 
-Тема 7 (REST API зі сховищем у пам'яті, Swagger, тести) виконана. Тема 8 (PostgreSQL, GORM,
-міграції, виправлення N+1) у роботі: умова, адаптована під варіант `albums`, лежить у
-[albums_lesson8_homework.md](albums_lesson8_homework.md), поточний стан описано в розділі
-[Lesson 8 Report](#lesson-8-report-інтеграція-бд-та-оптимізація-gorm).
+Умова Теми 8, адаптована під варіант `albums`: [albums_lesson8_homework.md](albums_lesson8_homework.md).
+Звіт про виконання: розділ [Lesson 8 Report](#lesson-8-report-інтеграція-бд-та-оптимізація-gorm).
 
-## Швидкий запуск
+## Швидкий запуск (Docker Compose)
 
-Потрібен Go 1.22 або новіший. Сторонніх сервісів поки немає: сховище в пам'яті, після перезапуску
-дані зникають, `id` знову починаються з 1.
+Потрібен Docker з Compose v2. PostgreSQL 16 і API піднімаються разом; міграції (схема та
+демо-дані: 3 жанри, 6 виконавців, 10 альбомів, 24 примірники) застосовуються автоматично на старті.
 
 ```sh
 # 1. Клонувати репозиторій
 git clone https://github.com/tatarchuk/golang-course-lesson-8.git && cd golang-course-lesson-8
 
-# 2. Запустити сервер (http://localhost:8080)
-go run ./cmd/api
+# 2. Конфігурація (значення збігаються зі стандартними в docker-compose.yml)
+cp .env.example .env
 
-# Інший порт або зібраний бінарник
-PORT=9090 go run ./cmd/api
-go build -o api ./cmd/api && ./api
+# 3. Зібрати образ і запустити PostgreSQL + API (http://localhost:8080)
+docker compose up -d --build
+
+# 4. Перевірити
+curl -s localhost:8080/health                      # {"status":"ok"}
+curl -s 'localhost:8080/api/v1/albums?limit=2'     # демо-дані з жанром і виконавцями
+docker compose logs -f api                         # кожен SQL-запит потрапляє в лог
+docker compose down                                # зупинити; дані лишаються у volume pgdata
 ```
 
-Перевірка: `curl -s localhost:8080/health` → `{"status":"ok"}`. Кожен запит логується на сервері як
-`METHOD /path -> status (duration)`.
+Те саме через `make up`, `make logs`, `make down` (усі цілі: `make` без аргументів показує Makefile).
 
-> **TODO (Тема 8):** після інтеграції PostgreSQL запуск виглядатиме так: `cp .env.example .env`,
-> `docker compose up -d`, `migrate -path migrations -database "$DATABASE_URL" up`, а сервер
-> читатиме `DATABASE_URL`, `MIGRATIONS_PATH` і `PORT` (саме так його запускає CI).
+### Запуск на хості
+
+Потрібен Go 1.25.11 або новіший (версія з `go.mod`). База береться з compose, сервер запускається
+локально і так само застосовує міграції на старті.
+
+```sh
+docker compose up -d postgres        # або make db
+set -a; . ./.env; set +a             # DATABASE_URL, MIGRATIONS_PATH, PORT
+go run ./cmd/api                     # або make run
+```
+
+| Змінна | Призначення | Типово |
+|---|---|---|
+| `DATABASE_URL` | рядок підключення PostgreSQL, обов'язкова | — |
+| `MIGRATIONS_PATH` | тека з міграціями golang-migrate | `migrations` |
+| `PORT` | порт HTTP-сервера | `8080` |
+| `DB_LOG_LEVEL` | логер GORM: `info` (кожен запит), `warn`, `error`, `silent` | `info` |
 
 ### Тести та перевірки
 
 ```sh
-go test -race -count=1 ./...                 # усі тести
-go test ./internal/app -run TestStage4 -v    # один етап Теми 7
-gofmt -l .                                   # має нічого не вивести
-go vet ./...
+docker compose up -d postgres                 # базу albums_test створює scripts/initdb на першому старті
+make test                                     # go test ./... -race -count=1 з TEST_DATABASE_URL із .env
+go test ./internal/model ./internal/handler ./internal/middleware   # без бази даних
+gofmt -l . && go vet ./...
+scripts/smoke.sh http://localhost:8080        # повтор API smoke-тесту CI проти запущеного сервера
 ```
 
-Окрім офіційних тестів етапів 1–5 Теми 7, є власні: валідація моделі та `null` у JSON; сховище
-(сортування, фільтр, пагінація, невикористання `id`, паралельні створення); парсинг `id` і
-`page`/`limit`; формат помилок; middleware (паніка → 500, CORS, логування); граничні випадки
-контракту через `NewRouter()`.
+Тести з базою (`internal/repository`, `internal/app`) читають `TEST_DATABASE_URL`; без неї вони
+пропускаються, а в CI змінна задана, тож пропусків немає. Пакети, що працюють із базою,
+серіалізуються advisory-lock'ом (`internal/testdb`), кожен тест починає з порожніх таблиць.
 
-CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml)) перевіряє вже вимоги
-Теми 8: структуру файлів, `gofmt`/`go vet`/`go build`, міграції на PostgreSQL, тести з реальною БД
-та smoke-тест API. Він залишатиметься червоним, доки Тема 8 не завершена.
+- `internal/model`: валідація вхідних структур, `null` для необов'язкових полів, хибні JSON-типи.
+- `internal/repository`: інтеграційні тести з реальною БД: створення зі зв'язками, невідомий жанр або
+  виконавець (`invalid_reference`, фантомний виконавець не створюється), дублікати (`conflict`),
+  список із фільтром і пагінацією, повна заміна у `PUT`, каскад при видаленні, примірники та
+  доступність, ідемпотентність міграцій, guard-тест `TestListQueryCountIsConstant` на N+1.
+- `internal/handler`: обробники з фейковими репозиторіями: порядок перевірок, коди помилок, парсинг.
+- `internal/app`: e2e через `NewRouter()` і реальну БД: той самий сценарій, що й smoke-тест CI, плюс
+  граничні випадки контракту Теми 7.
+- `internal/middleware`: паніка → 500, CORS, логування.
+
+Guard-тест `TestListQueryCountIsConstant` навмисно червоний, доки в `List` не застосовано `Preload`
+(частина 3 звіту). CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml))
+перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
+smoke-тест API; до виправлення N+1 червоними лишаються лише перевірки N+1.
 
 ### Документація API
 
 - Swagger UI із запуском запитів з браузера: <http://localhost:8080/swagger/index.html>.
 - Специфікація OpenAPI: [docs/swagger.yaml](docs/swagger.yaml), [docs/swagger.json](docs/swagger.json).
-- Runbook із `curl`-запитами на всі випадки контракту та очікуваними відповідями: [docs/CURL.md](docs/CURL.md).
+- Runbook із `curl`-запитами на всі випадки контракту: [docs/CURL.md](docs/CURL.md).
 
 Специфікацію згенеровано утилітою [swag](https://github.com/swaggo/swag) з анотацій у `cmd/api/main.go`
-та `internal/handler/album.go`. Після зміни анотацій, обробників чи моделі:
+та обробниках `internal/handler/*_handler.go`; після їх зміни: `make swagger`.
 
-```sh
-go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/api/main.go -o docs -ot go,yaml,json --parseInternal
-```
+## API
 
-## API (поточний контракт Теми 7)
+Усі відповіді, крім `204`, мають `Content-Type: application/json`; ключі в `snake_case`.
+Необов'язкові поля завжди присутні у відповіді (`null`, якщо не задані); час у RFC 3339 (UTC, `Z`).
 
-### Ресурс
+### Ресурси
 
 ```json
 {
   "id": 1,
   "title": "Kind of Blue",
-  "artist": "Miles Davis",
   "label": "Columbia",
-  "genre": "jazz",
+  "genre_id": 1,
+  "genre": {"id": 1, "name": "jazz", "created_at": "2026-10-09T10:00:00Z", "updated_at": "2026-10-09T10:00:00Z"},
+  "artists": [
+    {"id": 1, "name": "Miles Davis", "bio": "Trumpeter and bandleader.", "created_at": "...", "updated_at": "..."},
+    {"id": 2, "name": "John Coltrane", "bio": null, "created_at": "...", "updated_at": "..."}
+  ],
   "release_year": 1959,
   "notes": null,
-  "created_at": "2026-10-06T10:30:01.236249Z",
-  "updated_at": "2026-10-06T10:30:01.236249Z"
+  "created_at": "2026-10-09T10:00:00Z",
+  "updated_at": "2026-10-09T10:00:00Z"
 }
 ```
 
+Тіло `POST`/`PUT /albums` посилається на жанр і виконавців за `id`:
+
 | Поле | Тип | Обов'язкове | Примітка |
 |---|---|---|---|
-| `id` | ціле | — | видає сервер, починається з 1, ніколи не повторюється |
-| `title`, `artist`, `label` | рядок | так | не порожні й не лише з пробілів |
-| `genre` | рядок | так | поле фільтра у списку |
+| `title`, `label` | рядок | так | не порожні й не лише з пробілів; пара `title` + `label` унікальна |
+| `genre_id` | ціле | так | має існувати, інакше `422` `invalid_reference` |
+| `artist_ids` | масив цілих | так | непорожній, без повторів; невідомий id → `422` `invalid_reference` |
 | `release_year` | ціле | ні | `null`, якщо не задано |
 | `notes` | рядок | ні | `null`, якщо не задано |
-| `created_at`, `updated_at` | RFC 3339 | — | видає сервер; `PUT` змінює лише `updated_at` |
+
+Інші ресурси: жанр `{"id","name",...}` (вхід `{"name"}`, ім'я унікальне), виконавець
+`{"id","name","bio",...}` (вхід `{"name","bio"}`), примірник `{"id","album_id","inventory_no","status",...}`
+(вхід `{"inventory_no","status"}`, статус `available` | `borrowed` | `lost`, типово `available`,
+`inventory_no` унікальний), доступність `{"album_id","total_copies","available_copies"}`.
 
 ### Ендпоінти
 
-| Метод і шлях | Успіх | Помилки |
-|---|---|---|
-| `GET /health` | `200` `{"status":"ok"}` | |
-| `POST /api/v1/albums` | `201` + створений ресурс | `422` |
-| `GET /api/v1/albums` | `200` + масив | `400` `invalid_pagination` |
-| `GET /api/v1/albums/{id}` | `200` + ресурс | `400` `invalid_id`, `404` |
-| `PUT /api/v1/albums/{id}` | `200` + збережений ресурс | `400`, `422`, `404` |
-| `DELETE /api/v1/albums/{id}` | `204` без тіла | `400`, `404` |
-| `GET /swagger/` | Swagger UI | |
+| Запит | Відповідь |
+|---|---|
+| `GET /health` | `200` `{"status":"ok"}` |
+| `POST /api/v1/genres`; `GET /api/v1/genres`, `GET /api/v1/genres/{id}` | `201`; дубль імені → `409` `conflict`; порожнє ім'я → `422`; `200`; невідомий id → `404` |
+| `POST /api/v1/artists`; `GET /api/v1/artists`, `GET /api/v1/artists/{id}` | `201`; порожнє ім'я → `422`; `200`; невідомий id → `404` |
+| `POST /api/v1/albums` | `201` з вкладеними `genre` та `artists`; дубль `title`+`label` → `409`; невідомі посилання → `422` `invalid_reference`; інша валідація → `422` `validation_error` |
+| `GET /api/v1/albums?page=&limit=&genre_id=` | `200` масив (порожній як `[]`); `400` `invalid_pagination` або `validation_error` |
+| `GET /api/v1/albums/{id}` | `200`; `400` `invalid_id`; `404` `not_found` |
+| `PUT /api/v1/albums/{id}` | `200`, повна заміна, виконавці замінюються списком; `400`, `422`, `404` |
+| `DELETE /api/v1/albums/{id}` | `204` без тіла; каскадом зникають примірники та зв'язки; `400`, `404` |
+| `POST /api/v1/albums/{id}/copies`; `GET /api/v1/albums/{id}/copies` | `201` (`status` типово `available`); дубль `inventory_no` → `409`; хибний статус → `422`; невідомий альбом → `404` |
+| `GET /api/v1/albums/{id}/availability` | `200` `{"album_id","total_copies","available_copies"}`; `404` |
+| `GET /swagger/` | Swagger UI |
 
-- **Список:** `GET /api/v1/albums?page=1&limit=10&genre=jazz`. Порядок за `id`; `page` і `limit`
-  типово 1 і 10, мають бути цілими `>= 1`, `limit` понад 100 обрізається до 100; фільтр `genre` —
-  точний збіг, чутливий до регістру, порожнє значення означає «без фільтра». Дуже великі значення
-  не дають паніки чи `500`.
-- **`PUT` — повна заміна:** необов'язкові поля, яких немає в тілі, стають `null`. Порядок перевірок:
-  `id` (400) → тіло (422) → існування (404); відхилений запит нічого не змінює.
-- **Валідація (`422`):** відсутні, `null`, порожні або пробільні обов'язкові поля; хибний тип
-  необов'язкового поля; тіло, що не є JSON-об'єктом.
-- **`{id}`** — ціле від 0 до 4294967295 (`uint32`), інакше `400` `invalid_id`; коректний, але
-  неіснуючий — `404` `not_found`.
-- **Помилки** мають єдиний формат `{"error":{"code":"…","message":"…"}}` без внутрішніх деталей.
-  Коди: `invalid_id`, `invalid_pagination`, `validation_error`, `not_found`, `internal_server_error`.
-  Невідомий маршрут і непідтримуваний метод теж дають JSON `404`.
+- **Список:** порядок за `id`; `page` і `limit` типово 1 і 10, мають бути цілими `>= 1`, `limit` понад
+  100 обрізається до 100; `genre_id` — точний збіг, порожнє значення означає «без фільтра». Дуже великі
+  значення не дають паніки чи `500`.
+- **`PUT` — повна заміна:** необов'язкові поля, яких немає в тілі, стають `null`; `artist_ids` замінюють
+  попередній список. Порядок перевірок: `id` (400) → тіло (422) → існування (404) → посилання (422);
+  відхилений запит нічого не змінює (транзакція).
+- **`{id}`** — ціле від 0 до 4294967295 (`uint32`), інакше `400` `invalid_id`.
+- **Помилки** мають єдиний формат `{"error":{"code":"…","message":"…"}}` без внутрішніх деталей. Коди:
+  `invalid_id`, `invalid_pagination`, `validation_error`, `invalid_reference`, `conflict`, `not_found`,
+  `internal_server_error`. Невідомий маршрут і непідтримуваний метод дають JSON `404`.
 - **CORS:** кожна відповідь має `Access-Control-Allow-Origin: *`; `OPTIONS` → `204` зі списком методів.
 
 ## Структура проєкту та прийняті рішення
 
 ```
-cmd/api/main.go                      запуск сервера (порт із PORT, типово 8080)
-internal/app/app.go                  NewRouter(): сховище → обробники → ServeMux → ланцюжок middleware
-internal/model/                      Album (відповідь), AlbumInput (тіло запиту), Validate()
-internal/repository/                 інтерфейс AlbumRepository + MemoryRepository (RWMutex + map)
-internal/handler/                    HTTP-обробники, парсинг параметрів, запис JSON і помилок
+cmd/api/main.go                      конфігурація з env, підключення, міграції, HTTP-сервер, graceful shutdown
+internal/app/app.go                  NewRouter(repos): обробники → ServeMux → Logging(Recover(CORS))
+internal/model/                      GORM-моделі Album, Artist, Genre, Copy, User, AlbumArtist + вхідні структури з Validate()
+internal/repository/                 інтерфейси та GORM-реалізації, errors.go, db.go (Open), migrate.go (Migrate)
+internal/handler/                    HTTP-обробники (*_handler.go), errors.go (коди, відображення помилок), парсинг
 internal/middleware/                 Logging, Recover, CORS
-docs/                                OpenAPI (згенеровано swag) і runbook з curl
+internal/testdb/                     спільне підключення для тестів із БД (advisory lock, міграції, TRUNCATE)
+migrations/                          000001_init_schema, 000002_seed_demo_data (up/down)
+docs/                                OpenAPI (swag) і runbook з curl
+scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI), measure_n1.sh (N+1)
+Dockerfile, docker-compose.yml       образ API (multi-stage) і стек postgres + api
+Makefile, .env.example               щоденні команди та приклад конфігурації
 albums_lesson8_homework.md           умова Теми 8, адаптована під варіант albums
-db_migration_prompt.md               промпт для генерації SQL-міграцій (Тема 8, частина 1)
+db_migration_prompt.md               промпт для генерації SQL-міграцій (частина 1)
 .github/workflows/theme8-check.yml   CI Теми 8, адаптований під варіант albums
 ```
 
-- **Роутер** — стандартний `net/http` із шаблонами Go 1.22 (`"GET /api/v1/albums/{id}"`,
-  `r.PathValue`); сторонні залежності лише для Swagger UI.
-- **Шари.** Обробники залежать лише від інтерфейсу `AlbumRepository`, тож сховище в пам'яті можна
-  замінити на PostgreSQL, не торкаючись HTTP-коду. Саме це є точкою інтеграції БД у Темі 8.
-- **Сховище** тримає значення, а не вказівники: читачі отримують копії, тому `PUT` і `GET` не ділять
-  одну пам'ять; `sync.RWMutex` пускає читачів паралельно; `nextID` лише зростає, тому `id` ніколи
-  не повторюються. Кожен виклик `NewRouter()` створює нове порожнє сховище, без глобального стану.
-- **Два типи.** `AlbumInput` не має `id` і часу, тому клієнт не може їх задати. Необов'язкові поля —
-  вказівники (`*int`, `*string`) без `omitempty`: `nil` серіалізується як `null`, ключ завжди присутній.
-- **Декодування** через `json.Unmarshal` усього тіла (ліміт 1 MiB): відхиляє порожнє тіло, масив,
-  сміття після об'єкта та хибні типи; повідомлення не розкривають внутрішні Go-типи.
-- **Параметри.** `{id}` парситься `strconv.ParseUint(s, 10, 32)` — рівно діапазон контракту;
-  `page`/`limit` — `strconv.ParseInt`, переповнення трактується як «дуже велике число», а не як
-  помилка сервера. Пагінація без переповнення цілих: перевірка `page-1 > len/limit` перед обчисленням
-  зсуву.
-- **Порядок middleware** `Logging(Recover(CORS(mux)))`: лог бачить навіть 500 від `Recover`, а
-  заголовки CORS виставлені до того, як обробник міг запанікувати.
-- **Час** — `time.Now().UTC()`, у відповіді RFC 3339 із суфіксом `Z`.
+- **Шари.** Обробники залежать лише від інтерфейсів `AlbumRepository`, `ArtistRepository`,
+  `GenreRepository`, `CopyRepository`; `NewRouter` отримує їх структурою `repository.Repositories`, тож
+  тести обробників працюють на фейках, а `main` передає GORM-реалізації.
+- **Інтерфейс `AlbumRepository`** зберіг п'ять методів Теми 7; додано лише `ctx context.Context`,
+  який прокидається в кожен запит через `.WithContext(ctx)`.
+- **Запис альбому** виконується в транзакції: спочатку перевіряються жанр і виконавці (невідомий id →
+  `ErrInvalidReference`), потім вставляється рядок `albums` з `Omit(clause.Associations)`, а рядки
+  `album_artists` пишуться явно. Якби асоціації віддати GORM, він би зробив upsert виконавця з
+  невідомим id і мовчки створив порожній запис.
+- **`PUT`** оновлює колонки через `Select(...)`, тому `nil`-вказівники пишуться як `NULL`
+  (повна заміна), а зв'язки перезаписуються (delete + insert) у тій самій транзакції.
+- **Помилки драйвера** перекладаються один раз: `TranslateError: true` дає `gorm.ErrDuplicatedKey`,
+  `ErrForeignKeyViolated`, `ErrCheckConstraintViolated`, які `translate()` відображає на
+  `ErrConflict`, `ErrInvalidReference`, `ErrInvalidInput`; обробники мапують їх на 409/422.
+- **Схема лише через міграції:** `AutoMigrate` не використовується; `Migrate()` запускає golang-migrate
+  як бібліотеку (джерело `iofs`, драйвер `pgx/v5`) на старті застосунку, тому порожня база отримує
+  схему й демо-дані ще до першого запиту.
+- **Каскади** оголошені в БД: видалення альбому прибирає його примірники та зв'язки з виконавцями;
+  жанри й виконавці захищені `ON DELETE RESTRICT`.
+- **Логер GORM** на рівні `info` пише кожен SQL-запит у stdout одним рядком — саме так
+  рахується кількість `SELECT` для N+1 (локально, у `scripts/measure_n1.sh` і в CI). Пул:
+  25 відкритих, 5 простоюючих з'єднань, lifetime 30 хв; `NowFunc` у UTC.
+- **Середовище:** образ збирається у два етапи (статичний бінарник + `migrations/` на alpine, non-root);
+  у compose API чекає на `healthcheck` PostgreSQL і з'єднується з хостом `postgres`.
 
 ## Lesson 8 Report: інтеграція БД та оптимізація GORM
 
@@ -158,16 +207,19 @@ db_migration_prompt.md               промпт для генерації SQL-
 
 | Частина | Що потрібно | Стан |
 |---|---|---|
-| 1. Промпт-інжиніринг | промпт для міграцій; `migrations/000001_init_schema.*` і `000002_seed_demo_data.*`; `migrate up` | промпт готовий, міграції ще не згенеровано |
-| 2. AI-агент | моделі `Album`, `Artist`, `Genre`, `Copy`, `User`; GORM-репозиторії та обробники; `docker-compose.yml`, `.env.example`, підключення в `main.go` | не розпочато |
-| 3. Вручну | логер GORM `Info`, seed, логи «до», `Preload`, логи «після», latency | не розпочато |
+| 1. Промпт-інжиніринг | промпт для міграцій; `migrations/000001_init_schema.*` і `000002_seed_demo_data.*`; `migrate up` | готово |
+| 2. AI-агент | моделі `Album`, `Artist`, `Genre`, `Copy`, `User`; GORM-репозиторії та обробники; `docker-compose.yml`, `.env.example`, підключення в `main.go` | готово |
+| 3. Вручну | логер GORM `Info`, демо-дані, логи «до», `Preload`, логи «після», latency | логи «до» та виміри є; `Preload` і виміри «після» — ручний крок, див. нижче |
 
 ### Частина 1. Промпт для генерації міграцій
 
 Промпт призначений для генерації пари up/down міграцій у форматі
-[golang-migrate](https://github.com/golang-migrate/migrate) із Go-структур проєкту. На вхід подаються
-структури з `internal/model` (зараз лише `Album`; після нормалізації також `Artist`, `Genre`, `Copy`
-та `User`), результат — `migrations/000001_init_schema.up.sql` і `.down.sql`.
+[golang-migrate](https://github.com/golang-migrate/migrate) із Go-структур проєкту. На вхід подано
+структури з `internal/model` (`Album`, `Artist`, `Genre`, `AlbumArtist`, `Copy`, `User`); результат —
+[migrations/000001_init_schema.up.sql](migrations/000001_init_schema.up.sql) та
+[`.down.sql`](migrations/000001_init_schema.down.sql). Демо-дані винесено в окрему пару
+[000002_seed_demo_data](migrations/000002_seed_demo_data.up.sql), яка наприкінці пересуває
+послідовності (`setval`), щоб записи через API не конфліктували з явними id.
 Файл промпту: [db_migration_prompt.md](db_migration_prompt.md).
 
 Ключові вимоги, закладені в промпт:
@@ -218,14 +270,13 @@ Provide only two clean, copy-pasteable SQL code blocks (one for UP, one for DOWN
 
 </details>
 
-> **TODO (Тема 8):** згенерувати міграції, перевірити `.down.sql` (зворотний порядок видалення),
-> додати `000002_seed_demo_data.*` (щонайменше 8 альбомів, 20 примірників, альбом із двома
-> виконавцями, виконавець із двома альбомами) і застосувати `migrate up`.
+Аналіз результату: `.down.sql` видаляє індекси, обмеження й таблиці у зворотному порядку; обидві
+пари перевірено так само, як це робить CI (`migrate` v4.17.1: `up` → SQL-проби `CHECK`, `UNIQUE`,
+`FK`, каскад → `down -all` → `up`), а також тестом `TestMigrateIsIdempotentAndCreatesEveryTable`.
 
-### Частина 2. Цільова схема та API
+### Частина 2. Схема та реалізація
 
-Поточна реалізація тримає одну сутність `Album` у пам'яті, де `artist` і `genre` — текстові поля.
-Цільова схема Теми 8 за умовою та перевірками CI (ще не реалізована):
+Схема після нормалізації (`artist` і `genre` перестали бути текстовими полями альбому):
 
 ```mermaid
 erDiagram
@@ -259,60 +310,59 @@ erDiagram
         bigint id PK
         bigint album_id FK
         text inventory_no UK
-        text status "CHECK: available, lost, ..."
+        text status "CHECK: available, borrowed, lost"
     }
     users {
         bigint id PK
         text email UK
-        text role "CHECK"
+        text role "CHECK: member, staff, admin"
     }
 ```
 
-Усі таблиці мають `created_at` і `updated_at` (`TIMESTAMP NOT NULL DEFAULT now()`), на кожній
-FK-колонці є індекс `idx_{table}_{column}`.
-
-Цільовий контракт API (`/api/v1`), який перевіряє smoke-тест CI:
-
-| Запит | Відповідь |
-|---|---|
-| `POST /genres` `{"name"}`; `GET /genres`, `GET /genres/{id}` | `201`; дубль імені → `409` `conflict`; порожнє ім'я → `422`; невідомий `id` → `404` |
-| `POST /artists` `{"name"}`; `GET /artists`, `GET /artists/{id}` | `201`; невідомий `id` → `404` |
-| `POST /albums` `{"title","label","genre_id","artist_ids"}` (+ `release_year`, `notes`) | `201` із вкладеними `genre` та `artists`; дубль `title`+`label` → `409`; невідомий `genre_id`/`artist_id` → `422` `invalid_reference`; відсутній `title` або порожній `artist_ids` → `422` `validation_error` |
-| `GET /albums?genre_id=&page=&limit=`; `GET /albums/{id}` | `200`; невідомий `id` → `404` `not_found` |
-| `PUT /albums/{id}` (те саме тіло) | `200`, список виконавців замінюється; `404` |
-| `DELETE /albums/{id}` | `204`; каскадом видаляє `copies` та `album_artists`; `404` |
-| `POST /albums/{id}/copies` `{"inventory_no"}` (+ `status`); `GET /albums/{id}/copies` | `201`, `status` типово `available`; дубль `inventory_no` → `409`; хибний `status` → `422`; невідомий альбом → `404` |
-| `GET /albums/{id}/availability` | `200` `{"album_id","total_copies","available_copies"}`; `404` |
-
-> **TODO (Тема 8):** оновити моделі (`Genre`, `Artists []Artist` з тегом `many2many:album_artists`),
-> реалізувати GORM-репозиторії та обробники для `albums`, `artists`, `genres`, `copies`, додати
-> `docker-compose.yml`, `.env.example`, підключення та пул з'єднань у `cmd/api/main.go`. Офіційні
-> тести Теми 7 в `internal/app` після зміни контракту потрібно оновити або замінити тестами Теми 8.
+Усі таблиці мають `created_at` і `updated_at`, на кожній FK-колонці є індекс `idx_{table}_{column}`.
+Модель `Album` описує зв'язки тегами GORM: `Genre Genre \`gorm:"foreignKey:GenreID"\`` та
+`Artists []Artist \`gorm:"many2many:album_artists;"\``. Реалізацію репозиторіїв, обробників,
+підключення (`internal/repository/db.go`, пул `SetMaxOpenConns`/`SetMaxIdleConns`) і стека
+Docker Compose описано в розділі «Структура проєкту та прийняті рішення»; контракт API — у розділі «API».
 
 ### Частина 3. Докази виправлення N+1
 
-Поточне сховище в пам'яті виконує один прохід по `map` і сортування, тому проблеми N+1 ще немає.
-Вона з'явиться разом із GORM, якщо `List` довантажуватиме зв'язки в циклі: 1 запит на список +
-N запитів до `artists` + N до `genres`. Виправлення — `.Preload("Artists").Preload("Genre")` у
-методі `List`, після чого кількість запитів стала (CI очікує від 1 до 6 `SELECT` незалежно від
-кількості альбомів).
+Поточний метод `List` у `internal/repository/album_repository.go` після вибірки сторінки альбомів
+довантажує жанр і виконавців у циклі — по два запити на кожен альбом (1 + 2N). Виміряно на демо-даних
+(10 альбомів) через `scripts/measure_n1.sh` проти стека Docker Compose (macOS, Docker Desktop):
 
-Логи GORM до виправлення (`logger.Info`, `GET /api/v1/albums`):
-
-```text
-TODO: вставити фрагмент логу з повторюваними SELECT ... FROM "artists" / "genres" для кожного альбому
-```
-
-Логи після виправлення:
+Логи GORM **до** виправлення (`DB_LOG_LEVEL=info`, один `GET /api/v1/albums?limit=100`,
+21 `SELECT`; показано перші шість рядків із 21):
 
 ```text
-TODO: вставити фрагмент логу з Preload: SELECT ... WHERE "album_id" IN (...) та "id" IN (...)
+[1.295ms] [rows:10] SELECT * FROM "albums" ORDER BY id LIMIT 100
+[0.377ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.420ms] [rows:3] SELECT "artists"."id","artists"."name",... FROM "artists" JOIN "album_artists" ON ... WHERE "album_artists"."album_id" = 1
+[0.185ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.161ms] [rows:1] SELECT "artists"."id","artists"."name",... FROM "artists" JOIN "album_artists" ON ... WHERE "album_artists"."album_id" = 2
+[0.101ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+... (ще 15 таких самих пар на решту альбомів)
 ```
 
-| Показник (`GET /api/v1/albums`, тестовий набір) | До (N+1) | Після (`Preload`) |
+Логи **після** виправлення (`Preload`):
+
+```text
+TODO: вставити вивід scripts/measure_n1.sh після виправлення
+(очікувано 4 запити: albums, album_artists WHERE album_id IN (...), artists WHERE id IN (...), genres WHERE id IN (...))
+```
+
+| Показник (`GET /api/v1/albums?limit=100`, 10 альбомів) | До (цикл, N+1) | Після (`Preload`) |
 |---|---|---|
-| Кількість SQL-запитів | — | — |
-| Середній час відповіді, мс | — | — |
+| Кількість `SELECT` на один запит | 21 (1 + 2 x 10) | TODO |
+| Середній час відповіді (`ab -n 200 -c 1`) | 2.84 мс (p50 3, p95 4, p99 5 мс; 352 req/s) | TODO |
 
-> **TODO (Тема 8):** заповнити логи й таблицю реальними вимірами (наприклад, `curl -w '%{time_total}'`
-> у циклі або `hey`/`ab` на 50–100 запитів).
+> **TODO (ручний крок, частина 3):**
+>
+> 1. У `internal/repository/album_repository.go`, метод `List`: замінити цикл під коментарем
+>    `TODO(theme8 part 3)` на завантаження зв'язків одним ланцюжком перед `Find`:
+>    `q.Preload("Artists").Preload("Genre")`; цикл лишити лише для `normalizeAlbum(&albums[i])`.
+> 2. `go test ./internal/repository/ -run TestListQueryCountIsConstant` має стати зеленим
+>    (`make test` — увесь набір).
+> 3. `docker compose up -d --build`, потім `scripts/measure_n1.sh` — вставити вивід у блок «після»
+>    та в таблицю; `scripts/smoke.sh` має дати 59/59.
+> 4. Закомітити (`perf: fix N+1 in album List with Preload`) і запушити: CI стає зеленим.
