@@ -79,7 +79,10 @@ func (r *gormAlbumRepository) List(ctx context.Context, opts ListOptions) ([]mod
 		return albums, nil
 	}
 
-	q := r.db.WithContext(ctx).Order("id")
+	// Preload batches the relations: one query for the page of albums, then one for the
+	// album_artists links, one for the artists and one for the genres (WHERE id IN ...),
+	// four statements however many albums the page holds.
+	q := r.db.WithContext(ctx).Preload("Artists").Preload("Genre").Order("id")
 	if opts.GenreID > 0 {
 		q = q.Where("genre_id = ?", opts.GenreID)
 	}
@@ -87,15 +90,7 @@ func (r *gormAlbumRepository) List(ctx context.Context, opts ListOptions) ([]mod
 		return nil, translate(err)
 	}
 
-	// TODO(theme8 part 3): load the relations with Preload instead of this loop.
 	for i := range albums {
-		db := r.db.WithContext(ctx)
-		if err := db.First(&albums[i].Genre, albums[i].GenreID).Error; err != nil {
-			return nil, translate(err)
-		}
-		if err := db.Model(&albums[i]).Association("Artists").Find(&albums[i].Artists); err != nil {
-			return nil, translate(err)
-		}
 		normalizeAlbum(&albums[i])
 	}
 	return albums, nil
