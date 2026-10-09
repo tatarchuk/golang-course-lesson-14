@@ -278,46 +278,10 @@ Provide only two clean, copy-pasteable SQL code blocks (one for UP, one for DOWN
 
 Схема після нормалізації (`artist` і `genre` перестали бути текстовими полями альбому):
 
-```mermaid
-erDiagram
-    genres ||--o{ albums : "genre_id, RESTRICT"
-    albums ||--o{ album_artists : "CASCADE"
-    artists ||--o{ album_artists : "RESTRICT"
-    albums ||--o{ copies : "CASCADE"
+![ER-діаграма схеми Теми 8](docs/er.svg)
 
-    genres {
-        bigint id PK
-        text name UK
-    }
-    artists {
-        bigint id PK
-        text name
-        text bio "nullable"
-    }
-    albums {
-        bigint id PK
-        text title "UNIQUE разом із label"
-        text label
-        bigint genre_id FK
-        int release_year "nullable"
-        text notes "nullable"
-    }
-    album_artists {
-        bigint album_id PK, FK
-        bigint artist_id PK, FK
-    }
-    copies {
-        bigint id PK
-        bigint album_id FK
-        text inventory_no UK
-        text status "CHECK: available, borrowed, lost"
-    }
-    users {
-        bigint id PK
-        text email UK
-        text role "CHECK: member, staff, admin"
-    }
-```
+Джерело діаграми: [docs/er.puml](docs/er.puml) (PlantUML, нотація IE: `*` = NOT NULL); рендер локально командою
+`make er` (потрібен `plantuml`, наприклад `brew install plantuml`).
 
 Усі таблиці мають `created_at` і `updated_at`, на кожній FK-колонці є індекс `idx_{table}_{column}`.
 Модель `Album` описує зв'язки тегами GORM: `Genre Genre \`gorm:"foreignKey:GenreID"\`` та

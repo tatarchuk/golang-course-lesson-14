@@ -1,4 +1,4 @@
-.PHONY: help up down db logs run test migrate-up migrate-down swagger measure
+.PHONY: help up down db logs run test migrate-up migrate-down swagger measure er
 .DEFAULT_GOAL := help
 
 COMPOSE ?= docker compose
@@ -42,3 +42,6 @@ swagger:       ## regenerate docs/ from the handler annotations
 
 measure:       ## N+1 evidence: SELECT count and latency of GET /api/v1/albums (api on the host, log in app.log)
 	scripts/measure_n1.sh http://localhost:8080 app.log
+
+er:            ## render docs/er.svg from docs/er.puml (needs plantuml)
+	scripts/render_er.sh

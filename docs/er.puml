@@ -1,0 +1,73 @@
+@startuml er
+' ER diagram of the Theme 8 schema (migrations/000001_init_schema.up.sql).
+' Render: scripts/render_er.sh  ->  docs/er.svg
+' Notation: * = NOT NULL; PK, FK, UK = primary, foreign, unique key; CHECK = allowed values.
+hide circle
+skinparam linetype ortho
+skinparam defaultFontName Helvetica
+skinparam entity {
+  BackgroundColor #FDFDFD
+  BorderColor #444444
+}
+
+entity genres {
+  * id : bigint <<PK>>
+  --
+  * name : text <<UK>>
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+entity artists {
+  * id : bigint <<PK>>
+  --
+  * name : text
+  bio : text
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+entity albums {
+  * id : bigint <<PK>>
+  --
+  * title : text <<UK with label>>
+  * label : text
+  * genre_id : bigint <<FK>>
+  release_year : integer
+  notes : text
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+entity album_artists {
+  * album_id : bigint <<PK, FK>>
+  * artist_id : bigint <<PK, FK>>
+  --
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+entity copies {
+  * id : bigint <<PK>>
+  --
+  * album_id : bigint <<FK>>
+  * inventory_no : text <<UK>>
+  * status : text <<CHECK: available | borrowed | lost>>
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+entity users {
+  * id : bigint <<PK>>
+  --
+  * email : text <<UK>>
+  * role : text <<CHECK: member | staff | admin>>
+  * created_at : timestamp
+  * updated_at : timestamp
+}
+
+genres  ||--o{ albums        : "fk_albums_genre\nON DELETE RESTRICT"
+albums  ||--o{ album_artists : "fk_album_artists_album\nON DELETE CASCADE"
+artists ||--o{ album_artists : "fk_album_artists_artist\nON DELETE RESTRICT"
+albums  ||--o{ copies        : "fk_copies_album\nON DELETE CASCADE"
+@enduml
