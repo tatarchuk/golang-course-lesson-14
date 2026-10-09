@@ -1,0 +1,35 @@
+# scripts/measure_n1.sh http://localhost:8080 compose
+# State: List loads the genre and the artists of every album in a loop (1 + 2N queries).
+# Data: the demo seed (10 albums, 6 artists, 3 genres). Stack: docker compose on macOS (Docker Desktop).
+
+GET http://localhost:8080/api/v1/albums?limit=100
+albums returned: 10
+SELECT statements for one request: 21
+--- SQL log of that request (GORM logger, info level) ---
+[1.295ms] [rows:10] SELECT * FROM "albums" ORDER BY id LIMIT 100
+[0.377ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.420ms] [rows:3] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.185ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.161ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.101ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.193ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.170ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 2 ORDER BY "genres"."id" LIMIT 1
+[0.154ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.104ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 2 ORDER BY "genres"."id" LIMIT 1
+[0.111ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.086ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 2 ORDER BY "genres"."id" LIMIT 1
+[0.202ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.158ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 2 ORDER BY "genres"."id" LIMIT 1
+[0.183ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.150ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 3 ORDER BY "genres"."id" LIMIT 1
+[0.145ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.208ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 3 ORDER BY "genres"."id" LIMIT 1
+[0.247ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+[0.162ms] [rows:1] SELECT * FROM "genres" WHERE "genres"."id" = 1 ORDER BY "genres"."id" LIMIT 1
+[0.306ms] [rows:1] SELECT "artists"."id","artists"."name","artists"."bio","artists"."created_at","artists"."updated_at" FROM "artists" JOIN "album_art
+--- latency: ab -n 200 -c 1 ---
+Requests per second:    352.19 [#/sec] (mean)
+Time per request:       2.839 [ms] (mean)
+  50%      3
+  95%      4
+  99%      5

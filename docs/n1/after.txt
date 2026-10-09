@@ -1,0 +1,18 @@
+# scripts/measure_n1.sh http://localhost:8080 compose
+# State: List loads the relations with Preload("Artists").Preload("Genre") (4 queries per page).
+# Data: the demo seed (10 albums, 6 artists, 3 genres). Stack: docker compose on macOS (Docker Desktop).
+
+GET http://localhost:8080/api/v1/albums?limit=100
+albums returned: 10
+SELECT statements for one request: 4
+--- SQL log of that request (GORM logger, info level) ---
+[0.578ms] [rows:12] SELECT * FROM "album_artists" WHERE "album_artists"."album_id" IN (1,2,3,4,5,6,7,8,9,10)
+[0.487ms] [rows:6] SELECT * FROM "artists" WHERE "artists"."id" IN (1,2,6,3,4,5)
+[0.429ms] [rows:3] SELECT * FROM "genres" WHERE "genres"."id" IN (1,2,3)
+[4.833ms] [rows:10] SELECT * FROM "albums" ORDER BY id LIMIT 100
+--- latency: ab -n 200 -c 1 ---
+Requests per second:    752.95 [#/sec] (mean)
+Time per request:       1.328 [ms] (mean)
+  50%      1
+  95%      2
+  99%      3

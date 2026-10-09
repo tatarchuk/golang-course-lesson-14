@@ -74,10 +74,10 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
   граничні випадки контракту Теми 7.
 - `internal/middleware`: паніка → 500, CORS, логування.
 
-Guard-тест `TestListQueryCountIsConstant` навмисно червоний, доки в `List` не застосовано `Preload`
-(частина 3 звіту). CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml))
+Guard-тест `TestListQueryCountIsConstant` стежить, щоб кількість запитів у `List` не залежала від
+кількості альбомів. CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml))
 перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
-smoke-тест API; до виправлення N+1 червоними лишаються лише перевірки N+1.
+smoke-тест API; локальний повтор smoke-тесту (`scripts/smoke.sh`) дає 59/59.
 
 ### Документація API
 
@@ -209,7 +209,7 @@ db_migration_prompt.md               промпт для генерації SQL-
 |---|---|---|
 | 1. Промпт-інжиніринг | промпт для міграцій; `migrations/000001_init_schema.*` і `000002_seed_demo_data.*`; `migrate up` | готово |
 | 2. AI-агент | моделі `Album`, `Artist`, `Genre`, `Copy`, `User`; GORM-репозиторії та обробники; `docker-compose.yml`, `.env.example`, підключення в `main.go` | готово |
-| 3. Вручну | логер GORM `Info`, демо-дані, логи «до», `Preload`, логи «після», latency | логи «до» та виміри є; `Preload` і виміри «після» — ручний крок, див. нижче |
+| 3. Вручну | логер GORM `Info`, демо-дані, логи «до», `Preload`, логи «після», latency | готово: 21 → 4 запити, 2.84 → 1.33 мс |
 
 ### Частина 1. Промпт для генерації міграцій
 
@@ -327,12 +327,14 @@ Docker Compose описано в розділі «Структура проєк�
 
 ### Частина 3. Докази виправлення N+1
 
-Поточний метод `List` у `internal/repository/album_repository.go` після вибірки сторінки альбомів
-довантажує жанр і виконавців у циклі — по два запити на кожен альбом (1 + 2N). Виміряно на демо-даних
-(10 альбомів) через `scripts/measure_n1.sh` проти стека Docker Compose (macOS, Docker Desktop):
+**Діагностика.** Перша версія методу `List` у `internal/repository/album_repository.go` після вибірки
+сторінки альбомів довантажувала жанр і виконавців у циклі — по два запити на кожен альбом (1 + 2N).
+На демо-даних (10 альбомів) один `GET /api/v1/albums?limit=100` давав 21 `SELECT`, а guard-тест
+`TestListQueryCountIsConstant` фіксував 5 запитів для 2 альбомів і 21 для 10. Виміряно
+`scripts/measure_n1.sh` проти стека Docker Compose (macOS, Docker Desktop).
 
-Логи GORM **до** виправлення (`DB_LOG_LEVEL=info`, один `GET /api/v1/albums?limit=100`,
-21 `SELECT`; показано перші шість рядків із 21):
+Логи GORM **до** виправлення (`DB_LOG_LEVEL=info`, один запит, 21 `SELECT`; перші шість рядків,
+повний вивід у [docs/n1/before.txt](docs/n1/before.txt)):
 
 ```text
 [1.295ms] [rows:10] SELECT * FROM "albums" ORDER BY id LIMIT 100
@@ -344,25 +346,30 @@ Docker Compose описано в розділі «Структура проєк�
 ... (ще 15 таких самих пар на решту альбомів)
 ```
 
-Логи **після** виправлення (`Preload`):
+**Виправлення.** Цикл замінено пакетним довантаженням зв'язків у тому самому запиті:
+
+```go
+q := r.db.WithContext(ctx).Preload("Artists").Preload("Genre").Order("id")
+// далі фільтр за genre_id, Offset/Limit, Find(&albums) і лише normalizeAlbum для кожного альбому
+```
+
+Логи **після** виправлення (той самий запит, 4 `SELECT`: сторінка альбомів, зв'язки `album_artists`,
+виконавці та жанри через `WHERE id IN (...)`; повний вивід у [docs/n1/after.txt](docs/n1/after.txt)):
 
 ```text
-TODO: вставити вивід scripts/measure_n1.sh після виправлення
-(очікувано 4 запити: albums, album_artists WHERE album_id IN (...), artists WHERE id IN (...), genres WHERE id IN (...))
+[0.578ms] [rows:12] SELECT * FROM "album_artists" WHERE "album_artists"."album_id" IN (1,2,3,4,5,6,7,8,9,10)
+[0.487ms] [rows:6] SELECT * FROM "artists" WHERE "artists"."id" IN (1,2,6,3,4,5)
+[0.429ms] [rows:3] SELECT * FROM "genres" WHERE "genres"."id" IN (1,2,3)
+[4.833ms] [rows:10] SELECT * FROM "albums" ORDER BY id LIMIT 100
 ```
+
+GORM друкує рядок головного запиту останнім, бо його тривалість включає preload-запити.
 
 | Показник (`GET /api/v1/albums?limit=100`, 10 альбомів) | До (цикл, N+1) | Після (`Preload`) |
 |---|---|---|
-| Кількість `SELECT` на один запит | 21 (1 + 2 x 10) | TODO |
-| Середній час відповіді (`ab -n 200 -c 1`) | 2.84 мс (p50 3, p95 4, p99 5 мс; 352 req/s) | TODO |
+| Кількість `SELECT` на один запит | 21 (1 + 2 x 10) | 4, стала, не залежить від кількості альбомів |
+| Середній час відповіді (`ab -n 200 -c 1`) | 2.84 мс (p50 3, p95 4, p99 5 мс; 352 req/s) | 1.33 мс (p50 1, p95 2, p99 3 мс; 753 req/s) |
 
-> **TODO (ручний крок, частина 3):**
->
-> 1. У `internal/repository/album_repository.go`, метод `List`: замінити цикл під коментарем
->    `TODO(theme8 part 3)` на завантаження зв'язків одним ланцюжком перед `Find`:
->    `q.Preload("Artists").Preload("Genre")`; цикл лишити лише для `normalizeAlbum(&albums[i])`.
-> 2. `go test ./internal/repository/ -run TestListQueryCountIsConstant` має стати зеленим
->    (`make test` — увесь набір).
-> 3. `docker compose up -d --build`, потім `scripts/measure_n1.sh` — вставити вивід у блок «після»
->    та в таблицю; `scripts/smoke.sh` має дати 59/59.
-> 4. Закомітити (`perf: fix N+1 in album List with Preload`) і запушити: CI стає зеленим.
+Після виправлення guard-тест зелений, `scripts/smoke.sh` дає 59/59
+([docs/n1/smoke.txt](docs/n1/smoke.txt)), і перевірка CI «constant number of SELECTs» бачить ті самі
+4 запити до і після додавання п'яти альбомів. Відтворити: `make up`, потім `scripts/measure_n1.sh`.

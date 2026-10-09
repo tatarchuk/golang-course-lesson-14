@@ -221,5 +221,6 @@ scripts/measure_n1.sh http://localhost:8080                 # SELECT count + ab 
 docker compose logs --no-log-prefix api | grep -c SELECT     # raw count since the container started
 ```
 
-With the loop in `List`, one `GET /api/v1/albums?limit=100` over the 10 demo albums issues 21 SELECTs
-(1 + 2 per album); with `Preload("Artists").Preload("Genre")` it issues 4, however many albums there are.
+Before the fix, with the relations loaded in a loop, one `GET /api/v1/albums?limit=100` over the 10 demo albums
+issued 21 SELECTs (1 + 2 per album); with `Preload("Artists").Preload("Genre")` it issues 4, however many
+albums there are. Raw outputs of both measurements and of the smoke replay: `docs/n1/`.
