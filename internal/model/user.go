@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // User roles; the same list is enforced by the CHECK constraint on users.role.
 const (
@@ -9,15 +13,76 @@ const (
 	UserRoleAdmin  = "admin"
 )
 
-// User is an account of the catalogue. It is part of the schema only: no endpoint
-// exposes users yet.
+// Password length limits: bcrypt reads at most 72 bytes of the password.
+const (
+	MinPasswordLength = 8
+	MaxPasswordLength = 72
+)
+
+// User is an account of the catalogue. PasswordHash is never serialised: the json:"-" tag
+// keeps it out of every response, whatever struct is encoded.
 type User struct {
-	ID        int64     `json:"id" gorm:"primaryKey"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           int64     `json:"id" gorm:"primaryKey"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+	PasswordHash string    `json:"-" gorm:"column:password_hash"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // TableName pins the table name.
 func (User) TableName() string { return "users" }
+
+// ValidRole reports whether role is one of the three roles the schema allows.
+func ValidRole(role string) bool {
+	return role == UserRoleMember || role == UserRoleStaff || role == UserRoleAdmin
+}
+
+// NormalizeEmail trims and lower-cases an e-mail, so lookups and the UNIQUE constraint
+// treat "Reader@Albums.local" and "reader@albums.local" as one account.
+func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
+// RegisterInput is the body of POST /auth/register. It has no role field on purpose:
+// decoding a request into it can never touch Role or PasswordHash (no mass assignment).
+type RegisterInput struct {
+	Email    string `json:"email" validate:"required" example:"reader@albums.local"`
+	Password string `json:"password" validate:"required" example:"Correct-Horse-Battery-1"`
+}
+
+// Validate requires both fields and a password of 8..72 bytes.
+func (in RegisterInput) Validate() error {
+	problems := requiredProblem(field{"email", in.Email}, field{"password", in.Password})
+	if n := len(in.Password); strings.TrimSpace(in.Password) != "" && (n < MinPasswordLength || n > MaxPasswordLength) {
+		problems = append(problems, fmt.Sprintf("password must be between %d and %d bytes", MinPasswordLength, MaxPasswordLength))
+	}
+	return validationError(problems)
+}
+
+// LoginInput is the body of POST /auth/login.
+type LoginInput struct {
+	Email    string `json:"email" validate:"required" example:"reader@albums.local"`
+	Password string `json:"password" validate:"required" example:"Correct-Horse-Battery-1"`
+}
+
+// Validate requires both fields; the password only has to fit bcrypt's limit.
+func (in LoginInput) Validate() error {
+	problems := requiredProblem(field{"email", in.Email}, field{"password", in.Password})
+	if len(in.Password) > MaxPasswordLength {
+		problems = append(problems, fmt.Sprintf("password must be at most %d bytes", MaxPasswordLength))
+	}
+	return validationError(problems)
+}
+
+// RoleInput is the body of PUT /users/{id}/role: the only field an administrator can change.
+type RoleInput struct {
+	Role string `json:"role" validate:"required" example:"staff"`
+}
+
+// Validate requires a role from the schema's list.
+func (in RoleInput) Validate() error {
+	problems := requiredProblem(field{"role", in.Role})
+	if strings.TrimSpace(in.Role) != "" && !ValidRole(in.Role) {
+		problems = append(problems, "role must be one of: member, staff, admin")
+	}
+	return validationError(problems)
+}

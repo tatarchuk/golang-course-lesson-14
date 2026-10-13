@@ -1,0 +1,23 @@
+# Migration 000003 checked the way CI does it, on the scratch database albums_migr
+$ migrate -path migrations -database "$MIGR_URL" up
+1/u init_schema (26.909291ms)
+2/u seed_demo_data (34.668375ms)
+3/u add_auth_fields (38.779ms)
+$ psql albums_migr: SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = users AND column_name = password_hash
+password_hash|NO|''::text
+$ psql albums_migr: SELECT email, role, length(password_hash) FROM users ORDER BY id   (seed accounts: no password)
+admin@albums.local|admin|0
+staff@albums.local|staff|0
+member@albums.local|member|0
+$ migrate -path migrations -database "$MIGR_URL" down -all
+3/d add_auth_fields (5.700209ms)
+2/d seed_demo_data (12.25675ms)
+1/d init_schema (22.608042ms)
+$ psql albums_migr: SELECT count(*) FROM information_schema.tables WHERE table_name = users   (after down -all: 0)
+0
+$ migrate -path migrations -database "$MIGR_URL" up   (again)
+1/u init_schema (28.670542ms)
+2/u seed_demo_data (36.065667ms)
+3/u add_auth_fields (40.412167ms)
+$ migrate -path migrations -database "$MIGR_URL" version
+3
