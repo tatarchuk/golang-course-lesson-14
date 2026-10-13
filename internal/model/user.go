@@ -13,11 +13,32 @@ const (
 	UserRoleAdmin  = "admin"
 )
 
-// Password length limits: bcrypt reads at most 72 bytes of the password.
+// Password length limits: bcrypt reads at most 72 bytes of the password. MaxEmailLength is
+// the RFC 5321 limit, so nobody can register a megabyte-long "address".
 const (
 	MinPasswordLength = 8
 	MaxPasswordLength = 72
+	MaxEmailLength    = 254
 )
+
+// emailProblems checks the shape of a non-blank e-mail: at most MaxEmailLength bytes and
+// exactly one "@" with something on both sides. Deliverability is not checked here; a blank
+// value is reported by requiredProblem instead.
+func emailProblems(email string) []string {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil
+	}
+	var problems []string
+	if len(email) > MaxEmailLength {
+		problems = append(problems, fmt.Sprintf("email must be at most %d bytes", MaxEmailLength))
+	}
+	local, domain, ok := strings.Cut(email, "@")
+	if !ok || local == "" || domain == "" || strings.Contains(domain, "@") || strings.ContainsAny(email, " \t\r\n") {
+		problems = append(problems, "email must look like name@domain")
+	}
+	return problems
+}
 
 // User is an account of the catalogue. PasswordHash is never serialised: the json:"-" tag
 // keeps it out of every response, whatever struct is encoded.
@@ -52,6 +73,7 @@ type RegisterInput struct {
 // Validate requires both fields and a password of 8..72 bytes.
 func (in RegisterInput) Validate() error {
 	problems := requiredProblem(field{"email", in.Email}, field{"password", in.Password})
+	problems = append(problems, emailProblems(in.Email)...)
 	if n := len(in.Password); strings.TrimSpace(in.Password) != "" && (n < MinPasswordLength || n > MaxPasswordLength) {
 		problems = append(problems, fmt.Sprintf("password must be between %d and %d bytes", MinPasswordLength, MaxPasswordLength))
 	}
@@ -67,6 +89,7 @@ type LoginInput struct {
 // Validate requires both fields; the password only has to fit bcrypt's limit.
 func (in LoginInput) Validate() error {
 	problems := requiredProblem(field{"email", in.Email}, field{"password", in.Password})
+	problems = append(problems, emailProblems(in.Email)...)
 	if len(in.Password) > MaxPasswordLength {
 		problems = append(problems, fmt.Sprintf("password must be at most %d bytes", MaxPasswordLength))
 	}

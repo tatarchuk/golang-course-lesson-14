@@ -1,6 +1,7 @@
 # Local stack: PostgreSQL 16 plus the API built from this repository.
-# Database values default to the ones in .env.example; JWT_SECRET has no default on purpose,
-# so copy .env.example to .env (or export JWT_SECRET) before `docker compose up`.
+# Database values default to the ones in .env.example; JWT_SECRET has no default on purpose:
+# copy .env.example to .env and put a generated secret in it (openssl rand -base64 48) before
+# `docker compose up`. PostgreSQL is published on the loopback interface only.
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-albums}
       POSTGRES_DB: ${POSTGRES_DB:-albums}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432" # loopback only: the default password must never be reachable from the network
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./scripts/initdb:/docker-entrypoint-initdb.d:ro

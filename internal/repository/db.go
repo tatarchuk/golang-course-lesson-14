@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -15,9 +16,10 @@ import (
 // Config describes the database connection.
 type Config struct {
 	DSN          string
-	LogLevel     string // silent, error, warn or info (default: info, every SQL statement is logged)
-	MaxOpenConns int    // default 25
-	MaxIdleConns int    // default 5
+	LogLevel     string    // silent, error, warn or info (default: info, every SQL statement is logged)
+	MaxOpenConns int       // default 25
+	MaxIdleConns int       // default 5
+	LogOutput    io.Writer // where the SQL log goes (default os.Stdout); tests capture it
 }
 
 const (
@@ -30,10 +32,15 @@ const (
 // connection is retried for a few seconds. Every SQL statement is logged on stdout at
 // the info level: that is how the N+1 problem is observed and how CI counts SELECTs.
 func Open(cfg Config) (*gorm.DB, error) {
-	gormLogger := logger.New(log.New(os.Stdout, "", log.LstdFlags), logger.Config{
+	out := cfg.LogOutput
+	if out == nil {
+		out = os.Stdout
+	}
+	gormLogger := logger.New(log.New(out, "", log.LstdFlags), logger.Config{
 		SlowThreshold:             200 * time.Millisecond,
 		LogLevel:                  parseLogLevel(cfg.LogLevel),
 		IgnoreRecordNotFoundError: true,
+		ParameterizedQueries:      true, // log $1, $2 ... never the bound values (hashes, e-mails)
 		Colorful:                  false,
 	})
 	gormConfig := &gorm.Config{

@@ -95,3 +95,19 @@ func TestUserJSONHidesPasswordHash(t *testing.T) {
 		}
 	}
 }
+
+func TestEmailShapeAndLength(t *testing.T) {
+	long := strings.Repeat("a", 250) + "@b.co"
+	for _, tc := range []struct{ name, email, want string }{
+		{"no at sign", "nobody", "name@domain"},
+		{"two at signs", "a@b@c", "name@domain"},
+		{"empty local part", "@albums.local", "name@domain"},
+		{"empty domain", "reader@", "name@domain"},
+		{"space inside", "rea der@albums.local", "name@domain"},
+		{"too long", long, "at most 254"},
+	} {
+		expectValidation(t, "register "+tc.name, RegisterInput{Email: tc.email, Password: "Correct-Horse-Battery-1"}.Validate(), tc.want)
+		expectValidation(t, "login "+tc.name, LoginInput{Email: tc.email, Password: "Correct-Horse-Battery-1"}.Validate(), tc.want)
+	}
+	expectValidation(t, "register ok", RegisterInput{Email: " Reader@Albums.LOCAL ", Password: "Correct-Horse-Battery-1"}.Validate(), "")
+}

@@ -136,6 +136,8 @@ jobs:
           check "docker-compose.yml passes JWT_SECRET to the api" grep -q 'JWT_SECRET' docker-compose.yml
           auth_before_role() { grep -q 'protected(middleware.RequireRole' internal/app/app.go; }
           check "app.go wraps RequireRole inside Auth (Auth runs first)" auth_before_role
+          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md prompts.txt security_audit.md; }
+          check "No JWT committed under docs/ or in the reports" no_tokens_in_docs
 
           env_not_tracked() { grep -qx '\.env' .gitignore && ! git ls-files --error-unmatch .env 2> /dev/null; }
           check ".env is ignored and not committed" env_not_tracked
@@ -177,7 +179,7 @@ jobs:
       APP_URL: postgres://albums:albums@localhost:5432/albums?sslmode=disable
       TEST_URL: postgres://albums:albums@localhost:5432/albums_test?sslmode=disable
       MIGR_URL: postgres://albums:albums@localhost:5432/albums_migr?sslmode=disable
-      JWT_SECRET: ci-secret-not-for-production
+      JWT_SECRET: ci-secret-not-for-production-0123456789abcdef
       ADMIN_PASSWORD: Albums-Dev-2026
     steps:
       - uses: actions/checkout@v4

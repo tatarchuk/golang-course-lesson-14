@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,8 +39,8 @@ func run() error {
 		return errors.New("DATABASE_URL is required, e.g. postgres://albums:albums@localhost:5432/albums?sslmode=disable")
 	}
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		return errors.New("JWT_SECRET is required: a long random string that signs login tokens")
+	if err := validateSecret(secret); err != nil {
+		return err
 	}
 	migrations := envOr("MIGRATIONS_PATH", "migrations")
 	port := envOr("PORT", "8080")
@@ -88,6 +89,24 @@ func run() error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	}
+}
+
+// minSecretLength is the shortest JWT_SECRET the server accepts: HS256 is only as strong as
+// the secret, and a short one is brute-forceable offline from any captured token.
+const minSecretLength = 32
+
+// validateSecret rejects an empty, short or template secret before anything is signed with
+// it, so the .env.example placeholder can never reach a running server.
+func validateSecret(secret string) error {
+	switch {
+	case secret == "":
+		return errors.New("JWT_SECRET is required: a long random string that signs login tokens (openssl rand -base64 48)")
+	case strings.HasPrefix(secret, "change-me"):
+		return errors.New("JWT_SECRET still holds the .env.example placeholder: generate one with openssl rand -base64 48")
+	case len(secret) < minSecretLength:
+		return fmt.Errorf("JWT_SECRET must be at least %d bytes (openssl rand -base64 48)", minSecretLength)
+	}
+	return nil
 }
 
 func envOr(key, def string) string {

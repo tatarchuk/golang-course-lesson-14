@@ -29,7 +29,8 @@ func main() {
 }
 
 // run validates the input, applies pending migrations (a no-op when the API already did)
-// and upserts the account. The GORM logger stays at warn so the hash is never printed.
+// and upserts the account. SQL is logged with placeholders (repository.Open), so the hash
+// never reaches the output at any log level.
 func run(email, password string) error {
 	if password == "" {
 		password = os.Getenv("ADMIN_PASSWORD")
