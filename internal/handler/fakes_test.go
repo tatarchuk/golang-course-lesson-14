@@ -187,3 +187,57 @@ func expectError(t *testing.T, rec *httptest.ResponseRecorder, status int, code 
 }
 
 const validAlbumBody = `{"title":"Kind of Blue","label":"Columbia","genre_id":1,"artist_ids":[1,2],"release_year":1959}`
+
+type fakeUsers struct {
+	t           *testing.T
+	create      func(email, hash string) (model.User, error)
+	get         func(int64) (model.User, error)
+	getByEmail  func(string) (model.User, error)
+	list        func() ([]model.User, error)
+	updateRole  func(int64, string) (model.User, error)
+	upsertAdmin func(email, hash string) (model.User, error)
+}
+
+var _ repository.UserRepository = (*fakeUsers)(nil)
+
+func (f *fakeUsers) Create(_ context.Context, email, hash string) (model.User, error) {
+	if f.create == nil {
+		f.t.Fatal("unexpected Create call")
+	}
+	return f.create(email, hash)
+}
+
+func (f *fakeUsers) Get(_ context.Context, id int64) (model.User, error) {
+	if f.get == nil {
+		f.t.Fatal("unexpected Get call")
+	}
+	return f.get(id)
+}
+
+func (f *fakeUsers) GetByEmail(_ context.Context, email string) (model.User, error) {
+	if f.getByEmail == nil {
+		f.t.Fatal("unexpected GetByEmail call")
+	}
+	return f.getByEmail(email)
+}
+
+func (f *fakeUsers) List(_ context.Context) ([]model.User, error) {
+	if f.list == nil {
+		f.t.Fatal("unexpected List call")
+	}
+	return f.list()
+}
+
+func (f *fakeUsers) UpdateRole(_ context.Context, id int64, role string) (model.User, error) {
+	if f.updateRole == nil {
+		f.t.Fatal("unexpected UpdateRole call")
+	}
+	return f.updateRole(id, role)
+}
+
+func (f *fakeUsers) UpsertAdmin(_ context.Context, email, hash string) (model.User, error) {
+	if f.upsertAdmin == nil {
+		f.t.Fatal("unexpected UpsertAdmin call")
+	}
+	return f.upsertAdmin(email, hash)
+}

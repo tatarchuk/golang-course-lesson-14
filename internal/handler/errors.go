@@ -18,6 +18,8 @@ const (
 	CodeConflict          = "conflict"
 	CodeNotFound          = "not_found"
 	CodeInternal          = "internal_server_error"
+	CodeUnauthenticated   = "unauthenticated"
+	CodeForbidden         = "forbidden"
 )
 
 // ErrorResponse is the envelope of every error reply: {"error":{"code":"...","message":"..."}}.
