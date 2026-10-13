@@ -125,7 +125,7 @@ check») перевіряє структуру файлів, статичні п
 командою `cmd/bootstrap`, проходить сценарій Теми 9 (401 → реєстрація → 403 для `member` → логін
 адміністратора → підвищення ролі) і далі виконує каталожні перевірки Теми 8 з токеном адміністратора;
 окрема перевірка стежить, щоб у лозі сервера не було bcrypt-хешів. Локальний повтор:
-`scripts/smoke.sh` дає 78/78 ([docs/auth/smoke.txt](docs/auth/smoke.txt)). Workflow запускається на кожен push і pull request; результат — у вкладці Actions репозиторію.
+`scripts/smoke.sh` дає 78/78 ([docs/auth/smoke.txt](docs/auth/smoke.txt)). Workflow запускається на кожен push і pull request; зелений запуск для цього коду (обидві джоби, Static checks та Migrations, tests, API smoke test): <https://github.com/tatarchuk/golang-course-lesson-9/actions/runs/38393093569>.
 
 ### Документація API
 
