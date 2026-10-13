@@ -26,6 +26,9 @@ func NewGenreHandler(genres repository.GenreRepository) *GenreHandler {
 // @Success  201    {object}  model.Genre
 // @Failure  409    {object}  ErrorResponse  "A genre with this name exists"
 // @Failure  422    {object}  ErrorResponse
+// @Failure  401    {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403    {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /genres [post]
 func (h *GenreHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var in model.GenreInput

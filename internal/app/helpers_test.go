@@ -1,23 +1,36 @@
 package app_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"homework/internal/app"
+	"homework/internal/model"
 	"homework/internal/repository"
 	"homework/internal/testdb"
 )
 
-// newRouter resets the database and builds the full HTTP handler on top of it.
+// newRouter resets the database and builds the full HTTP handler on top of it. The
+// secret is set through the environment, as the Lesson 9 tests do, and read back the
+// way main does.
 func newRouter(t *testing.T) http.Handler {
 	t.Helper()
+	t.Setenv("JWT_SECRET", testJWTSecret)
 	testdb.Reset(t)
-	return app.NewRouter(repository.NewGorm(testdb.DB(t)))
+	return app.NewRouter(repository.NewGorm(testdb.DB(t)), app.Config{JWTSecret: os.Getenv("JWT_SECRET")})
+}
+
+// staffCall serves one request with a staff token minted with the shared secret: since
+// Lesson 9 the catalogue writes of the Theme 8 tests need it.
+func staffCall(h http.Handler, method, path, body string) resp {
+	return authCall(h, method, path, body, mintToken(1, model.UserRoleStaff, time.Hour))
 }
 
 type resp struct {
@@ -68,6 +81,10 @@ func expect(t *testing.T, r resp, status int, code string) map[string]any {
 	if status == http.StatusNoContent {
 		return nil
 	}
+	if code == "" && bytes.HasPrefix(bytes.TrimSpace(r.Body), []byte("[")) {
+		// A list answers with a JSON array: the caller asked for the status only (see list()).
+		return nil
+	}
 	obj := object(t, r)
 	if code != "" {
 		e, _ := obj["error"].(map[string]any)
@@ -104,9 +121,9 @@ func id(obj map[string]any) int64 { return int64(obj["id"].(float64)) }
 // fixtures creates one genre and two artists through the API and returns their ids.
 func fixtures(t *testing.T, h http.Handler) (genre int64, artists []int64) {
 	t.Helper()
-	genre = id(expect(t, call(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 201, ""))
+	genre = id(expect(t, staffCall(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 201, ""))
 	for _, name := range []string{"Smoke Artist", "Smoke Artist Two"} {
-		artists = append(artists, id(expect(t, call(h, "POST", "/api/v1/artists", fmt.Sprintf(`{"name":%q}`, name)), 201, "")))
+		artists = append(artists, id(expect(t, staffCall(h, "POST", "/api/v1/artists", fmt.Sprintf(`{"name":%q}`, name)), 201, "")))
 	}
 	return genre, artists
 }

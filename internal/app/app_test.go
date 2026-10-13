@@ -39,9 +39,9 @@ func TestCORSPreflightAndHeaders(t *testing.T) {
 func TestGenresAndArtistsEndpoints(t *testing.T) {
 	h := newRouter(t)
 
-	genre := expect(t, call(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 201, "")
-	expect(t, call(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 409, "conflict")
-	expect(t, call(h, "POST", "/api/v1/genres", `{}`), 422, "validation_error")
+	genre := expect(t, staffCall(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/genres", `{"name":"Smoke Genre"}`), 409, "conflict")
+	expect(t, staffCall(h, "POST", "/api/v1/genres", `{}`), 422, "validation_error")
 	got := expect(t, call(h, "GET", "/api/v1/genres/1", ""), 200, "")
 	if got["name"] != "Smoke Genre" || id(got) != id(genre) {
 		t.Errorf("get genre: %v", got)
@@ -50,8 +50,8 @@ func TestGenresAndArtistsEndpoints(t *testing.T) {
 		t.Errorf("expected 1 genre, got %d", n)
 	}
 
-	a1 := expect(t, call(h, "POST", "/api/v1/artists", `{"name":"Smoke Artist"}`), 201, "")
-	expect(t, call(h, "POST", "/api/v1/artists", `{"name":"Smoke Artist Two","bio":"second"}`), 201, "")
+	a1 := expect(t, staffCall(h, "POST", "/api/v1/artists", `{"name":"Smoke Artist"}`), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/artists", `{"name":"Smoke Artist Two","bio":"second"}`), 201, "")
 	got = expect(t, call(h, "GET", "/api/v1/artists/1", ""), 200, "")
 	if id(got) != id(a1) || got["bio"] != nil {
 		t.Errorf("get artist: %v", got)
@@ -67,7 +67,7 @@ func TestAlbumsEndpoints(t *testing.T) {
 	genre, artists := fixtures(t, h)
 
 	body := albumBody("Smoke Album", genre, artists[0])
-	created := expect(t, call(h, "POST", "/api/v1/albums", body), 201, "")
+	created := expect(t, staffCall(h, "POST", "/api/v1/albums", body), 201, "")
 	album := id(created)
 	if arts := created["artists"].([]any); len(arts) != 1 {
 		t.Errorf("created album should contain its artist: %v", created)
@@ -81,12 +81,12 @@ func TestAlbumsEndpoints(t *testing.T) {
 		}
 	}
 
-	expect(t, call(h, "POST", "/api/v1/albums", body), 409, "conflict")
-	expect(t, call(h, "POST", "/api/v1/albums", albumBody("Bad Artist", genre, 999999)), 422, "invalid_reference")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", body), 409, "conflict")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Bad Artist", genre, 999999)), 422, "invalid_reference")
 	expect(t, call(h, "GET", "/api/v1/artists/999999", ""), 404, "not_found")
-	expect(t, call(h, "POST", "/api/v1/albums", albumBody("Bad Genre", 999999, artists[0])), 422, "invalid_reference")
-	expect(t, call(h, "POST", "/api/v1/albums", `{"label":"Smoke Label"}`), 422, "validation_error")
-	expect(t, call(h, "POST", "/api/v1/albums", albumBody("Bad Empty", genre)), 422, "validation_error")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Bad Genre", 999999, artists[0])), 422, "invalid_reference")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", `{"label":"Smoke Label"}`), 422, "validation_error")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Bad Empty", genre)), 422, "validation_error")
 	if n := countRows(t, "albums", "1 = 1"); n != 1 {
 		t.Errorf("rejected requests must not create albums, found %d", n)
 	}
@@ -97,7 +97,7 @@ func TestAlbumsEndpoints(t *testing.T) {
 	}
 	expect(t, call(h, "GET", "/api/v1/albums/999999", ""), 404, "not_found")
 
-	updated := expect(t, call(h, "PUT", "/api/v1/albums/1", albumBody("Smoke Album Updated", genre, artists[1])), 200, "")
+	updated := expect(t, staffCall(h, "PUT", "/api/v1/albums/1", albumBody("Smoke Album Updated", genre, artists[1])), 200, "")
 	arts := updated["artists"].([]any)
 	if updated["title"] != "Smoke Album Updated" || len(arts) != 1 || int64(arts[0].(map[string]any)["id"].(float64)) != artists[1] {
 		t.Errorf("update should replace title and artists: %v", updated)
@@ -105,16 +105,16 @@ func TestAlbumsEndpoints(t *testing.T) {
 	if updated["created_at"] != created["created_at"] {
 		t.Errorf("created_at must survive a PUT: %v vs %v", updated["created_at"], created["created_at"])
 	}
-	expect(t, call(h, "PUT", "/api/v1/albums/999999", albumBody("X", genre, artists[0])), 404, "not_found")
+	expect(t, staffCall(h, "PUT", "/api/v1/albums/999999", albumBody("X", genre, artists[0])), 404, "not_found")
 	_ = album
 }
 
 func TestListFilterAndPagination(t *testing.T) {
 	h := newRouter(t)
 	genre, artists := fixtures(t, h)
-	other := id(expect(t, call(h, "POST", "/api/v1/genres", `{"name":"Other"}`), 201, ""))
+	other := id(expect(t, staffCall(h, "POST", "/api/v1/genres", `{"name":"Other"}`), 201, ""))
 	for i, g := range []int64{genre, other, other} {
-		expect(t, call(h, "POST", "/api/v1/albums", albumBody("Album "+string(rune('A'+i)), g, artists...)), 201, "")
+		expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Album "+string(rune('A'+i)), g, artists...)), 201, "")
 	}
 
 	filtered := list(t, call(h, "GET", "/api/v1/albums?genre_id=1", ""))
@@ -142,17 +142,17 @@ func TestListFilterAndPagination(t *testing.T) {
 func TestCopiesAndAvailabilityEndpoints(t *testing.T) {
 	h := newRouter(t)
 	genre, artists := fixtures(t, h)
-	expect(t, call(h, "POST", "/api/v1/albums", albumBody("Smoke Album", genre, artists[0])), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Smoke Album", genre, artists[0])), 201, "")
 
-	first := expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 201, "")
+	first := expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 201, "")
 	if first["status"] != "available" || int64(first["album_id"].(float64)) != 1 {
 		t.Errorf("first copy: %v", first)
 	}
-	expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-2","status":"available"}`), 201, "")
-	expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-3","status":"lost"}`), 201, "")
-	expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 409, "conflict")
-	expect(t, call(h, "POST", "/api/v1/albums/999999/copies", `{"inventory_no":"SMOKE-X"}`), 404, "not_found")
-	expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-4","status":"broken"}`), 422, "validation_error")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-2","status":"available"}`), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-3","status":"lost"}`), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 409, "conflict")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/999999/copies", `{"inventory_no":"SMOKE-X"}`), 404, "not_found")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-4","status":"broken"}`), 422, "validation_error")
 
 	if copies := list(t, call(h, "GET", "/api/v1/albums/1/copies", "")); len(copies) != 3 {
 		t.Errorf("expected 3 copies, got %v", copies)
@@ -167,10 +167,10 @@ func TestCopiesAndAvailabilityEndpoints(t *testing.T) {
 func TestAlbumDeleteCascades(t *testing.T) {
 	h := newRouter(t)
 	genre, artists := fixtures(t, h)
-	expect(t, call(h, "POST", "/api/v1/albums", albumBody("Gone", genre, artists...)), 201, "")
-	expect(t, call(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", albumBody("Gone", genre, artists...)), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums/1/copies", `{"inventory_no":"SMOKE-1"}`), 201, "")
 
-	expect(t, call(h, "DELETE", "/api/v1/albums/1", ""), 204, "")
+	expect(t, staffCall(h, "DELETE", "/api/v1/albums/1", ""), 204, "")
 	expect(t, call(h, "GET", "/api/v1/albums/1", ""), 404, "not_found")
 	if n := countRows(t, "copies", "album_id = ?", 1); n != 0 {
 		t.Errorf("copies should cascade, found %d", n)
@@ -178,7 +178,7 @@ func TestAlbumDeleteCascades(t *testing.T) {
 	if n := countRows(t, "album_artists", "album_id = ?", 1); n != 0 {
 		t.Errorf("artist links should cascade, found %d", n)
 	}
-	expect(t, call(h, "DELETE", "/api/v1/albums/999999", ""), 404, "not_found")
+	expect(t, staffCall(h, "DELETE", "/api/v1/albums/999999", ""), 404, "not_found")
 	if n := countRows(t, "artists", "1 = 1"); n != 2 {
 		t.Errorf("deleting an album must not delete artists, found %d", n)
 	}
@@ -189,7 +189,7 @@ func TestContractEdgeCases(t *testing.T) {
 	h := newRouter(t)
 	genre, artists := fixtures(t, h)
 	body := albumBody("Edge", genre, artists[0])
-	expect(t, call(h, "POST", "/api/v1/albums", body), 201, "")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", body), 201, "")
 
 	for _, bad := range []string{"abc", "-1", "1.5", "4294967296"} {
 		expect(t, call(h, "GET", "/api/v1/albums/"+bad, ""), 400, "invalid_id")
@@ -204,15 +204,15 @@ func TestContractEdgeCases(t *testing.T) {
 	if r := call(h, "GET", "/api/v1/albums?page=1&limit=100", ""); len(list(t, r)) != 1 {
 		t.Errorf("normal list after huge values: %s", r)
 	}
-	expect(t, call(h, "POST", "/api/v1/albums", body+` {}`), 422, "validation_error")
-	expect(t, call(h, "POST", "/api/v1/albums", `[1,2,3]`), 422, "validation_error")
-	expect(t, call(h, "PUT", "/api/v1/albums/abc", `{not json`), 400, "invalid_id")
-	expect(t, call(h, "PUT", "/api/v1/albums/999", `{not json`), 422, "validation_error")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", body+` {}`), 422, "validation_error")
+	expect(t, staffCall(h, "POST", "/api/v1/albums", `[1,2,3]`), 422, "validation_error")
+	expect(t, staffCall(h, "PUT", "/api/v1/albums/abc", `{not json`), 400, "invalid_id")
+	expect(t, staffCall(h, "PUT", "/api/v1/albums/999", `{not json`), 422, "validation_error")
 
 	// A rejected PUT changes nothing.
 	before := expect(t, call(h, "GET", "/api/v1/albums/1", ""), 200, "")
-	expect(t, call(h, "PUT", "/api/v1/albums/1", `{"title":"Changed"}`), 422, "validation_error")
-	expect(t, call(h, "PUT", "/api/v1/albums/1", albumBody("Changed", genre, 999999)), 422, "invalid_reference")
+	expect(t, staffCall(h, "PUT", "/api/v1/albums/1", `{"title":"Changed"}`), 422, "validation_error")
+	expect(t, staffCall(h, "PUT", "/api/v1/albums/1", albumBody("Changed", genre, 999999)), 422, "invalid_reference")
 	after := expect(t, call(h, "GET", "/api/v1/albums/1", ""), 200, "")
 	if after["title"] != before["title"] || after["updated_at"] != before["updated_at"] {
 		t.Errorf("rejected PUT must change nothing: %v -> %v", before, after)

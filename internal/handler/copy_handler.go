@@ -30,6 +30,9 @@ func NewCopyHandler(copies repository.CopyRepository) *CopyHandler {
 // @Failure  404   {object}  ErrorResponse  "Album not found"
 // @Failure  409   {object}  ErrorResponse  "Inventory number already used"
 // @Failure  422   {object}  ErrorResponse
+// @Failure  401   {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403   {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /albums/{id}/copies [post]
 func (h *CopyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	albumID, ok := pathID(w, r)

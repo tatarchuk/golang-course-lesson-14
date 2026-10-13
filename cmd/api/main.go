@@ -16,9 +16,14 @@ import (
 )
 
 // @title        Albums API
-// @version      2.0
-// @description  REST API for a music album catalogue on PostgreSQL: genres, artists, albums and their physical copies.
+// @version      3.0
+// @description  REST API for a music album catalogue on PostgreSQL: genres, artists, albums and their physical copies. Reads are public; writes need a staff or admin bearer token from POST /auth/login.
 // @BasePath     /api/v1
+//
+// @securityDefinitions.apikey  BearerAuth
+// @in                          header
+// @name                        Authorization
+// @description                 Type "Bearer " followed by the token from POST /auth/login.
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -31,6 +36,10 @@ func run() error {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return errors.New("DATABASE_URL is required, e.g. postgres://albums:albums@localhost:5432/albums?sslmode=disable")
+	}
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return errors.New("JWT_SECRET is required: a long random string that signs login tokens")
 	}
 	migrations := envOr("MIGRATIONS_PATH", "migrations")
 	port := envOr("PORT", "8080")
@@ -51,7 +60,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           app.NewRouter(repository.NewGorm(db)),
+		Handler:           app.NewRouter(repository.NewGorm(db), app.Config{JWTSecret: secret}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

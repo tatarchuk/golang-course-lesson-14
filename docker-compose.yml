@@ -1,5 +1,6 @@
-# Local stack for Theme 8: PostgreSQL 16 plus the API built from this repository.
-# Values default to the ones in .env.example, so `docker compose config` works without a .env file.
+# Local stack: PostgreSQL 16 plus the API built from this repository.
+# Database values default to the ones in .env.example; JWT_SECRET has no default on purpose,
+# so copy .env.example to .env (or export JWT_SECRET) before `docker compose up`.
 services:
   postgres:
     image: postgres:16-alpine
@@ -28,6 +29,7 @@ services:
       MIGRATIONS_PATH: /app/migrations
       PORT: "8080"
       DB_LOG_LEVEL: ${DB_LOG_LEVEL:-info}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (cp .env.example .env)}
     depends_on:
       postgres:
         condition: service_healthy

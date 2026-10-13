@@ -25,6 +25,9 @@ func NewArtistHandler(artists repository.ArtistRepository) *ArtistHandler {
 // @Param    artist  body      model.ArtistInput  true  "Artist to create"
 // @Success  201     {object}  model.Artist
 // @Failure  422     {object}  ErrorResponse
+// @Failure  401     {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403     {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /artists [post]
 func (h *ArtistHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var in model.ArtistInput

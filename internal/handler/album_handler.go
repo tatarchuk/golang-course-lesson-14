@@ -28,6 +28,9 @@ func NewAlbumHandler(albums repository.AlbumRepository) *AlbumHandler {
 // @Success  201    {object}  model.Album
 // @Failure  409    {object}  ErrorResponse  "An album with the same title and label exists"
 // @Failure  422    {object}  ErrorResponse  "validation_error or invalid_reference"
+// @Failure  401    {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403    {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /albums [post]
 func (h *AlbumHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var in model.AlbumInput
@@ -115,6 +118,9 @@ func (h *AlbumHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure  404    {object}  ErrorResponse
 // @Failure  409    {object}  ErrorResponse
 // @Failure  422    {object}  ErrorResponse
+// @Failure  401    {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403    {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /albums/{id} [put]
 func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -141,6 +147,9 @@ func (h *AlbumHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Success  204  "No Content"
 // @Failure  400  {object}  ErrorResponse
 // @Failure  404  {object}  ErrorResponse
+// @Failure  401  {object}  ErrorResponse  "No valid bearer token"
+// @Failure  403  {object}  ErrorResponse  "The role may not write to the catalogue"
+// @Security BearerAuth
 // @Router   /albums/{id} [delete]
 func (h *AlbumHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
