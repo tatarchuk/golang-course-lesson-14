@@ -28,18 +28,35 @@ type resp struct {
 
 func (r resp) String() string { return fmt.Sprintf("%d %s", r.Code, strings.TrimSpace(string(r.Body))) }
 
-// call serves one request; a non-empty body is sent as JSON.
-func call(h http.Handler, method, path, body string) resp {
-	var req *http.Request
-	if body != "" {
-		req = httptest.NewRequest(method, path, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-	} else {
-		req = httptest.NewRequest(method, path, nil)
+// newRequest builds one request; a non-empty body is sent as JSON.
+func newRequest(method, path, body string) *http.Request {
+	if body == "" {
+		return httptest.NewRequest(method, path, nil)
 	}
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+// serve runs one request through the handler and captures the reply.
+func serve(h http.Handler, req *http.Request) resp {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return resp{Code: rec.Code, Header: rec.Header(), Body: rec.Body.Bytes()}
+}
+
+// call serves one request without credentials.
+func call(h http.Handler, method, path, body string) resp {
+	return serve(h, newRequest(method, path, body))
+}
+
+// authCall serves one request with a bearer token; an empty token sends no Authorization header.
+func authCall(h http.Handler, method, path, body, token string) resp {
+	req := newRequest(method, path, body)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return serve(h, req)
 }
 
 // expect asserts the status and, for errors, the error code.
