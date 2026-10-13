@@ -240,6 +240,8 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/1 
 ### 401 `unauthenticated` and 403 `forbidden`
 
 ```sh
+MEMBER_TOKEN=$(curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.com","password":"Correct-Horse-Battery-1"}' | jq -r .token)   # a member from section 2
 curl -s -i -X POST localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"x"}'
 curl -s -i -X POST localhost:8080/api/v1/genres -H "Authorization: Bearer $MEMBER_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x"}'
 curl -s -i localhost:8080/api/v1/me -H 'Authorization: Bearer not.a.jwt'

@@ -1,6 +1,6 @@
 name: Theme 8 + Theme 9 check
 
-# Put this file into the student's repository as .github/workflows/theme8-check.yml
+# CI of the course project: Theme 8 (PostgreSQL, GORM, migrations, N+1) and Theme 9 (bcrypt, JWT, RBAC) checks.
 # Every check is reported in the job summary (Actions -> run -> Summary) as PASS/FAIL;
 # a step fails at the END if at least one check failed, so one run shows all problems.
 #

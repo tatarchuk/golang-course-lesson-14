@@ -106,7 +106,7 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
   `email already registered`, жодного хеша у відповіді), логін (однакове тіло `401` для хибного
   пароля, невідомого e-mail і акаунта без пароля, причому останній теж коштує одне bcrypt-порівняння),
   `GET /me` (`401` для видаленого акаунта), список акаунтів і зміна ролі (`400` → `422` → `404`).
-- `internal/middleware`: паніка → 500, CORS (з `Authorization`), логування; Тема 9: `Auth` (шість видів
+- `internal/middleware`: паніка → 500, CORS (з `Authorization`), логування; Тема 9: `Auth` (сім видів
   хибних облікових даних → `401`, обробник не викликається; схема `bearer` будь-яким регістром),
   `RequireRole` (`401` без користувача, `403` для `member`, пропуск `staff`/`admin`).
 - `internal/app`: e2e через `NewRouter()` і реальну БД: сценарій smoke-тесту CI, граничні випадки
@@ -274,7 +274,7 @@ security_audit.md                    AI-аудит безпеки: знахід�
 
 Рішення Теми 9:
 
-- **Секрет JWT.** `cmd/api/main.go:40-43` читає `JWT_SECRET` один раз на старті й завершується з
+- **Секрет JWT.** `cmd/api/main.go:41-44` читає `JWT_SECRET` один раз на старті й завершується з
   помилкою, якщо він порожній, коротший за 32 байти або є заготовкою з `.env.example`
   (`validateSecret`, `TestValidateSecret`); роутер отримує його явно через `app.Config{JWTSecret}`
   (`internal/app/app.go:17-19`) і додатково панікує на порожнє значення (`app.go:28`,
@@ -299,8 +299,8 @@ security_audit.md                    AI-аудит безпеки: знахід�
   робить `return` без `next.ServeHTTP` (`internal/middleware/auth.go:20-28`, `rbac.go:20-27`), тож
   обгорнутий обробник не виконується, а відхилений запис нічого не створює.
 - **DTO.** `RegisterInput` і `LoginInput` містять лише `email` та `password`, `RoleInput` — лише
-  `role` (`internal/model/user.go:47-88`); обробники декодують запити лише в них, ніколи в
-  `model.User`; `User.PasswordHash` має тег `json:"-"` (`user.go:28`), тож хеш не серіалізується
+  `role` (`internal/model/user.go:68-111`); обробники декодують запити лише в них, ніколи в
+  `model.User`; `User.PasswordHash` має тег `json:"-"` (`user.go:49`), тож хеш не серіалізується
   жодним шляхом.
 - **Логування** без змін: метод, шлях, статус, тривалість (`internal/middleware/logging.go`); жодних
   тіл запитів і заголовка `Authorization`.
