@@ -8,7 +8,9 @@ the `Date` header differ on your machine.
 
 ```sh
 cp .env.example .env
+sed -i '' "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -base64 48)|" .env   # the example value is a placeholder the server refuses (Linux: sed -i)
 docker compose up -d --build      # postgres + api on :8080; migrations (schema + demo data) run on start
+make bootstrap                    # Lesson 9: gives admin@albums.local the password from ADMIN_PASSWORD in .env
 docker compose logs -f api        # every SQL statement is logged (DB_LOG_LEVEL=info)
 ```
 
@@ -23,15 +25,49 @@ scripts/smoke.sh http://localhost:8080            # the CI API flow against a ru
 scripts/measure_n1.sh http://localhost:8080       # SELECT count and latency of GET /api/v1/albums
 ```
 
-## 2. Conventions used below
+## 2. Get a token (Lesson 9)
+
+Reads are public. Every write (`POST`, `PUT`, `DELETE`) needs `Authorization: Bearer <token>` of a
+`staff` or `admin` account, `GET /me` needs any account and `/users` needs `admin`. The seed accounts
+have no password, so create the administrator first (`make bootstrap`, or
+`docker compose exec -e ADMIN_PASSWORD=... api /app/bootstrap -email admin@albums.local`), then log in.
+Tokens are HS256 JWTs signed with `JWT_SECRET`; they expire after 24 hours and carry the role at login
+time, so a changed role takes effect at the next login.
+
+```sh
+# the administrator that make bootstrap created (ADMIN_EMAIL / ADMIN_PASSWORD from .env)
+TOKEN=$(curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"admin@albums.local","password":"Albums-Dev-2026"}' | jq -r .token)
+
+# a new account is always a member: it can read and see itself, an admin can promote it
+curl -s -X POST localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.com","password":"Correct-Horse-Battery-1"}'
+curl -s localhost:8080/api/v1/me -H "Authorization: Bearer $TOKEN"
+curl -s -X PUT localhost:8080/api/v1/users/4/role -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"role":"staff"}'
+curl -s localhost:8080/api/v1/users -H "Authorization: Bearer $TOKEN"
+```
+
+```
+{"id":4,"email":"alice@example.com","role":"member","created_at":"...","updated_at":"..."}
+{"id":1,"email":"admin@albums.local","role":"admin","created_at":"...","updated_at":"..."}
+{"id":4,"email":"alice@example.com","role":"staff","created_at":"...","updated_at":"..."}
+[{"id":1,"email":"admin@albums.local","role":"admin",...},{"id":2,"email":"staff@albums.local","role":"staff",...},...]
+```
+
+No response ever contains the password hash. The examples below assume `TOKEN` holds a staff or
+admin token.
+
+## 3. Conventions used below
 
 - Base URL: `localhost:8080/api/v1`. curl adds `http://` itself.
 - `-s` hides the progress bar. `-i` prints the status line and headers.
 - Query strings with `&` must be quoted, otherwise the shell runs the command in the background.
 - Every response except `204` is JSON; append `| python3 -m json.tool` to pretty-print.
+- Writes carry `-H "Authorization: Bearer $TOKEN"` (section 2); without it they answer `401`, with a
+  member token `403`. The access check runs before any other check (`PUT /albums/abc` without a token is `401`).
 - The demo data already holds 3 genres, 6 artists, 10 albums and 24 copies, so new ids start at 4, 7, 11 and 25.
 
-## 3. Happy path, in order
+## 4. Happy path, in order
 
 ### Health
 
@@ -50,12 +86,12 @@ Content-Type: application/json
 ### Genres and artists
 
 ```sh
-curl -s -X POST localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"soul"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"soul"}'
 curl -s localhost:8080/api/v1/genres                      # all genres, ordered by id
 curl -s localhost:8080/api/v1/genres/1                    # {"id":1,"name":"jazz",...}
-curl -s -X POST localhost:8080/api/v1/artists -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/artists -H 'Content-Type: application/json' \
   -d '{"name":"Aretha Franklin","bio":"Queen of Soul"}'
-curl -s -X POST localhost:8080/api/v1/artists -H 'Content-Type: application/json' -d '{"name":"King Curtis"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/artists -H 'Content-Type: application/json' -d '{"name":"King Curtis"}'
 curl -s localhost:8080/api/v1/artists/7                   # {"id":7,"name":"Aretha Franklin","bio":"Queen of Soul",...}
 ```
 
@@ -68,7 +104,7 @@ curl -s localhost:8080/api/v1/artists/7                   # {"id":7,"name":"Aret
 ### Create an album that references them (id 11)
 
 ```sh
-curl -s -i -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
+curl -s -i -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
   -d '{"title":"Live at Fillmore West","label":"Atlantic","genre_id":4,"artist_ids":[7,8],"release_year":1971}'
 ```
 
@@ -95,8 +131,8 @@ curl -s 'localhost:8080/api/v1/albums?page=99'              # []
 ### Copies and availability
 
 ```sh
-curl -s -X POST localhost:8080/api/v1/albums/11/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0025"}'
-curl -s -X POST localhost:8080/api/v1/albums/11/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0026","status":"lost"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/11/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0025"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/11/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0026","status":"lost"}'
 curl -s localhost:8080/api/v1/albums/11/copies
 curl -s localhost:8080/api/v1/albums/11/availability
 ```
@@ -111,7 +147,7 @@ curl -s localhost:8080/api/v1/albums/11/availability
 ### Update: PUT is a full replacement, artist_ids replace the artists
 
 ```sh
-curl -s -X PUT localhost:8080/api/v1/albums/11 -H 'Content-Type: application/json' \
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/11 -H 'Content-Type: application/json' \
   -d '{"title":"Live at Fillmore West","label":"Atlantic","genre_id":4,"artist_ids":[7]}'
 ```
 
@@ -122,22 +158,22 @@ curl -s -X PUT localhost:8080/api/v1/albums/11 -H 'Content-Type: application/jso
 ### Delete: 204, copies and artist links go with the album
 
 ```sh
-curl -s -i -X DELETE localhost:8080/api/v1/albums/11       # HTTP/1.1 204 No Content
+curl -s -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/11       # HTTP/1.1 204 No Content
 curl -s localhost:8080/api/v1/albums/11                     # {"error":{"code":"not_found","message":"Album not found"}}
 curl -s localhost:8080/api/v1/artists/7                     # the artist still exists
 ```
 
-## 4. Error cases
+## 5. Error cases
 
 All error responses have the same shape: `{"error":{"code":"...","message":"..."}}`.
 
 ### 409 `conflict`: UNIQUE constraints
 
 ```sh
-curl -s -X POST localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"jazz"}'
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"jazz"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
   -d '{"title":"Kind of Blue","label":"Columbia","genre_id":1,"artist_ids":[1]}'
-curl -s -X POST localhost:8080/api/v1/albums/1/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0001"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/1/copies -H 'Content-Type: application/json' -d '{"inventory_no":"INV-0001"}'
 ```
 
 ```
@@ -149,7 +185,7 @@ curl -s -X POST localhost:8080/api/v1/albums/1/copies -H 'Content-Type: applicat
 ### 422 `invalid_reference`: unknown genre or artist (nothing is created)
 
 ```sh
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
   -d '{"title":"Bad","label":"L","genre_id":1,"artist_ids":[999999]}'
 curl -s localhost:8080/api/v1/artists/999999                # still 404: no phantom artist
 ```
@@ -161,14 +197,14 @@ curl -s localhost:8080/api/v1/artists/999999                # still 404: no phan
 ### 422 `validation_error`
 
 ```sh
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' -d '{"label":"L"}'
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' -d '{"label":"L"}'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
   -d '{"title":"T","label":"L","genre_id":1,"artist_ids":[]}'
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' \
   -d '{"title":"T","label":"L","genre_id":"1","artist_ids":[1]}'
-curl -s -X POST localhost:8080/api/v1/albums/1/copies -H 'Content-Type: application/json' \
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/1/copies -H 'Content-Type: application/json' \
   -d '{"inventory_no":"X","status":"broken"}'
-curl -s -X POST localhost:8080/api/v1/albums -H 'Content-Type: application/json' -d '{not json'
+curl -s -X POST -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums -H 'Content-Type: application/json' -d '{not json'
 ```
 
 ```
@@ -193,15 +229,35 @@ curl -s -i -X PATCH localhost:8080/api/v1/albums/1          # 404 route not foun
 ### PUT check order: id (400), then body (422), then existence (404), then references (422)
 
 ```sh
-curl -s -X PUT localhost:8080/api/v1/albums/abc -H 'Content-Type: application/json' -d '{not json'
-curl -s -X PUT localhost:8080/api/v1/albums/999 -H 'Content-Type: application/json' -d '{not json'
-curl -s -X PUT localhost:8080/api/v1/albums/999 -H 'Content-Type: application/json' \
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/abc -H 'Content-Type: application/json' -d '{not json'
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/999 -H 'Content-Type: application/json' -d '{not json'
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/999 -H 'Content-Type: application/json' \
   -d '{"title":"X","label":"L","genre_id":1,"artist_ids":[1]}'
-curl -s -X PUT localhost:8080/api/v1/albums/1 -H 'Content-Type: application/json' \
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/albums/1 -H 'Content-Type: application/json' \
   -d '{"title":"X","label":"L","genre_id":1,"artist_ids":[999999]}'   # 422 and album 1 is unchanged
 ```
 
-## 5. CORS
+### 401 `unauthenticated` and 403 `forbidden`
+
+```sh
+curl -s -i -X POST localhost:8080/api/v1/genres -H 'Content-Type: application/json' -d '{"name":"x"}'
+curl -s -i -X POST localhost:8080/api/v1/genres -H "Authorization: Bearer $MEMBER_TOKEN" -H 'Content-Type: application/json' -d '{"name":"x"}'
+curl -s -i localhost:8080/api/v1/me -H 'Authorization: Bearer not.a.jwt'
+curl -s -i -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"nobody@albums.local","password":"wrong"}'
+```
+
+```
+HTTP/1.1 401 Unauthorized   {"error":{"code":"unauthenticated","message":"a bearer token is required"}}
+HTTP/1.1 403 Forbidden      {"error":{"code":"forbidden","message":"this action requires role staff or admin"}}
+HTTP/1.1 401 Unauthorized   {"error":{"code":"unauthenticated","message":"invalid or expired token"}}
+HTTP/1.1 401 Unauthorized   {"error":{"code":"unauthenticated","message":"invalid credentials"}}
+```
+
+An unknown e-mail and a wrong password get the same `401` body, so the endpoint cannot enumerate
+accounts; an expired token, another secret, a tampered payload or `alg: none` all get `invalid or
+expired token`.
+
+## 6. CORS
 
 ```sh
 curl -s -i -X OPTIONS localhost:8080/api/v1/albums -H 'Origin: http://example.com' -H 'Access-Control-Request-Method: POST'
@@ -209,12 +265,12 @@ curl -s -i -X OPTIONS localhost:8080/api/v1/albums -H 'Origin: http://example.co
 
 ```
 HTTP/1.1 204 No Content
-Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Headers: Content-Type, Authorization
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 Access-Control-Allow-Origin: *
 ```
 
-## 6. N+1 in the logs
+## 7. N+1 in the logs
 
 ```sh
 scripts/measure_n1.sh http://localhost:8080                 # SELECT count + ab latency, reads docker compose logs

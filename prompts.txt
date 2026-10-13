@@ -102,6 +102,21 @@ Produce these files and nothing else:
 Do not touch internal/app/app.go or internal/middleware (a second prompt covers them). Do not add
 tests (they are written separately). Output each file completely, no placeholders.
 
+--- Result / manual edits (2.1) ---
+Generated as specified: migrations/000003_add_auth_fields.{up,down}.sql; internal/model/user.go
+(PasswordHash json:"-", RegisterInput, LoginInput, RoleInput, ValidRole, NormalizeEmail);
+internal/auth/{doc,password,token,context}.go; internal/repository/user_repository.go (+ Users in
+Repositories and NewGorm); internal/handler/errors.go (two codes), auth_handler.go, user_handler.go;
+cmd/api/main.go (JWT_SECRET fail-fast, app.Config, swag security block); .env.example and
+docker-compose.yml (JWT_SECRET). Reviewed by hand before each commit (homework Task 1.2): the login
+handler compares against auth.DummyHash both for an unknown e-mail and for an account whose stored
+hash is empty (the seed rows before cmd/bootstrap), otherwise bcrypt's instant ErrHashTooShort would
+make those accounts enumerable by timing; GET /me answers 401, not 404, for a token whose account was
+deleted. Dependencies pinned to golang.org/x/crypto v0.53.0 and github.com/golang-jwt/jwt/v5 v5.3.1
+to keep the module at go 1.25.11 (@latest pulled go 1.26). Every piece was written test-first:
+go test ./internal/model ./internal/auth ./internal/repository ./internal/handler -race, and after
+prompt 2.2 the acceptance tests go test ./internal/app/ -run 'Auth|RBAC' -v.
+
 === Prompt 2.2: middleware chain (Auth, RequireRole) and route groups ===
 
 Continue in the same repository ("Albums API", Go module `homework`, net/http ServeMux). The package
@@ -155,6 +170,16 @@ Generate:
 
 Output each file completely. No tests (written separately), no other files.
 
+--- Result / manual edits (2.2) ---
+Generated: internal/middleware/auth.go (Auth), rbac.go (RequireRole), cors.go (Authorization in
+Access-Control-Allow-Headers), doc.go; internal/app/app.go (Config, NewRouter(repos, cfg), the public /
+protected / staff / admin groups); @Security BearerAuth plus 401/403 responses on the six catalogue
+write handlers. No manual edits in the generated code. The Theme 8 test helpers were adapted as the
+brief asks: newRouter sets JWT_SECRET and passes app.Config, staffCall() sends a staff token for the
+35 catalogue writes, and expect() accepts a JSON array for list responses, which the shipped RBAC
+matrix relies on. Verified: go test ./internal/middleware -race, go test ./internal/app/ -run 'Auth|RBAC' -v
+(all green), go test ./... -race -count=1.
+
 === Prompt 3.1: AI security review ===
 
 Review this Go net/http API code for security vulnerabilities. Check specifically for: 1) SQL injection
@@ -172,3 +197,15 @@ configuration in internal/repository/db.go (what gets logged at Info level) and 
 (24 h stateless JWT, role claim). Report every finding as: id, file:line, severity, category (1-4 or
 other), what an attacker can do, proposed fix (a few lines, no full rewrites). Also list what you checked
 and found correct, so false positives can be triaged.
+
+--- Result / triage (3.1) ---
+The reviewer (an independent agent with a fresh context and read-only access) returned 7 findings
+(4 Medium, 3 Low), an informational list and a "checked and found correct" list; the raw output is
+docs/auth/audit-raw.md. Triage in security_audit.md: Fixed Now - parameterized SQL logging
+(TestOpenLogsSQLWithoutValues), JWT_SECRET strength and placeholder guard (TestValidateSecret),
+e-mail shape and length cap (TestEmailShapeAndLength), a redacted token transcript with the local
+secret rotated and a CI grep for committed JWTs, PostgreSQL bound to 127.0.0.1; Tracked for Later -
+the stateless role claim (required by the brief and TestRBACMatrix), rate limiting, the register
+enumeration answer (the brief fixes the 422 message); plus the empty-hash timing issue found in the
+manual review before the agent ran. Verified with go test ./... -race -count=1, scripts/smoke.sh
+and the CI check "No bcrypt hash in the server log".
