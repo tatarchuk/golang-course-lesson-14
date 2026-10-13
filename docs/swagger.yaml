@@ -14,6 +14,11 @@ definitions:
       error:
         $ref: '#/definitions/handler.ErrorDetail'
     type: object
+  handler.TokenResponse:
+    properties:
+      token:
+        type: string
+    type: object
   model.Album:
     properties:
       artists:
@@ -149,12 +154,58 @@ definitions:
     required:
     - name
     type: object
+  model.LoginInput:
+    properties:
+      email:
+        example: reader@albums.local
+        type: string
+      password:
+        example: Correct-Horse-Battery-1
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.RegisterInput:
+    properties:
+      email:
+        example: reader@albums.local
+        type: string
+      password:
+        example: Correct-Horse-Battery-1
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.RoleInput:
+    properties:
+      role:
+        example: staff
+        type: string
+    required:
+    - role
+    type: object
+  model.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      role:
+        type: string
+      updated_at:
+        type: string
+    type: object
 info:
   contact: {}
   description: 'REST API for a music album catalogue on PostgreSQL: genres, artists,
-    albums and their physical copies.'
+    albums and their physical copies. Reads are public; writes need a staff or admin
+    bearer token from POST /auth/login.'
   title: Albums API
-  version: "2.0"
+  version: "3.0"
 paths:
   /albums:
     get:
@@ -209,6 +260,14 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.Album'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "409":
           description: An album with the same title and label exists
           schema:
@@ -217,6 +276,8 @@ paths:
           description: validation_error or invalid_reference
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create an album
       tags:
       - albums
@@ -235,10 +296,20 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "404":
           description: Not Found
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Delete an album
       tags:
       - albums
@@ -294,6 +365,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "404":
           description: Not Found
           schema:
@@ -306,6 +385,8 @@ paths:
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Replace an album (full update)
       tags:
       - albums
@@ -389,6 +470,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "404":
           description: Album not found
           schema:
@@ -401,6 +490,8 @@ paths:
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Add a physical copy to an album
       tags:
       - copies
@@ -435,10 +526,20 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.Artist'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "422":
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create an artist
       tags:
       - artists
@@ -468,6 +569,60 @@ paths:
       summary: Get an artist by id
       tags:
       - artists
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: E-mail and password
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TokenResponse'
+        "401":
+          description: invalid credentials
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Log in and receive a 24-hour bearer token
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: E-mail and password (8-72 bytes)
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/model.RegisterInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.User'
+        "422":
+          description: Blank fields, bad JSON or an e-mail that is already registered
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Register an account (role member)
+      tags:
+      - auth
   /genres:
     get:
       produces:
@@ -499,6 +654,14 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/model.Genre'
+        "401":
+          description: No valid bearer token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: The role may not write to the catalogue
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
         "409":
           description: A genre with this name exists
           schema:
@@ -507,6 +670,8 @@ paths:
           description: Unprocessable Entity
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create a genre
       tags:
       - genres
@@ -536,4 +701,100 @@ paths:
       summary: Get a genre by id
       tags:
       - genres
+  /me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "401":
+          description: No valid token, or the account no longer exists
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: The account behind the bearer token
+      tags:
+      - auth
+  /users:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.User'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List every account (admin)
+      tags:
+      - users
+  /users/{id}/role:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: User id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'New role: member, staff or admin'
+        in: body
+        name: role
+        required: true
+        schema:
+          $ref: '#/definitions/model.RoleInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change the role of an account (admin)
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer " followed by the token from POST /auth/login.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
