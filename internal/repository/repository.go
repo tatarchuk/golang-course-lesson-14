@@ -9,6 +9,7 @@ type Repositories struct {
 	Artists ArtistRepository
 	Genres  GenreRepository
 	Copies  CopyRepository
+	Users   UserRepository
 }
 
 // NewGorm builds the GORM-backed repositories on one shared connection.
@@ -18,6 +19,7 @@ func NewGorm(db *gorm.DB) Repositories {
 		Artists: &gormArtistRepository{db: db},
 		Genres:  &gormGenreRepository{db: db},
 		Copies:  &gormCopyRepository{db: db},
+		Users:   &gormUserRepository{db: db},
 	}
 }
 
