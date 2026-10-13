@@ -1,4 +1,4 @@
-== smoke test against http://localhost:8080 (tag 1791879690)
+== smoke test against http://localhost:8080 (tag 1791885488)
 PASS: /health returns status ok
 PASS: Swagger UI is served
 PASS: CORS preflight is handled

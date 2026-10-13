@@ -1,0 +1,9 @@
+# Evidence for security_audit.md finding 1, AFTER the fix (ParameterizedQueries: true): the same
+# registration, the same Info-level logger, placeholders instead of values.
+$ curl -s -X POST localhost:8080/api/v1/auth/register -d {"email":"log-evidence@albums.local","password":"..."}  -> 201
+$ docker compose logs --no-log-prefix api | grep INSERT INTO "users"
+[1.841ms] [rows:1] INSERT INTO "users" ("email","role","password_hash","created_at","updated_at") VALUES ($1$,$2$,$3$,$4$,$5$) RETURNING "id"
+$ docker compose logs --no-log-prefix api | grep -c "\$2a\$"   -- bcrypt hashes in the log
+0
+$ docker compose logs --no-log-prefix api | grep -c "log-evidence@albums.local"   -- e-mails in the log
+0

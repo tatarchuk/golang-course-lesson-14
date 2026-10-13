@@ -1,0 +1,12 @@
+ok  	homework/cmd/api	1.818s
+ok  	homework/cmd/bootstrap	4.397s
+?   	homework/docs	[no test files]
+ok  	homework/internal/app	15.630s
+ok  	homework/internal/auth	4.532s
+ok  	homework/internal/handler	6.383s
+ok  	homework/internal/middleware	1.478s
+ok  	homework/internal/model	1.414s
+ok  	homework/internal/repository	5.017s
+?   	homework/internal/testdb	[no test files]
+
+# top-level tests passed (go test ./... -count=1 -v | grep -c "^--- PASS"): 102

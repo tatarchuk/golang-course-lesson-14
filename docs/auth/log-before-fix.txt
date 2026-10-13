@@ -1,0 +1,9 @@
+# Evidence for security_audit.md finding 1, taken BEFORE the fix (GORM logger at Info level
+# prints bound values). Image built from commit 8131dc1; hash masked here.
+$ curl -s -X POST localhost:8080/api/v1/auth/register -d {"email":"log-evidence@albums.local","password":"..."}  -> 201
+$ docker compose logs --no-log-prefix api | grep -c "\$2a\$"
+1
+$ docker compose logs --no-log-prefix api | grep INSERT INTO "users"
+[4.440ms] [rows:1] INSERT INTO "users" ("email","role","password_hash","created_at","updated_at") VALUES ('log-evidence@albums.local','member','$2a$10$<53 chars masked>','2026-10-13 09:39:59.822','2026-10-13 09:39:59.822') RETURNING "id"
+$ docker compose logs --no-log-prefix api | grep -ciE "authorization|eyJhbGci"   -- tokens and headers are never logged
+0
