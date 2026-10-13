@@ -8,7 +8,7 @@ func CORS(next http.Handler) http.Handler {
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", "*")
 		h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		h.Set("Access-Control-Allow-Headers", "Content-Type")
+		h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization") // Authorization: browsers may send the bearer token
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
