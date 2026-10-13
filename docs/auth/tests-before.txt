@@ -1,0 +1,62 @@
+2026/10/13 10:57:35 migrations: schema version 2 (dirty=false)
+=== RUN   TestAuthRegisterAndLogin
+=== RUN   TestAuthRegisterAndLogin/register_creates_a_member_and_answers_with_the_user,_not_the_hash
+2026/10/13 10:57:35 POST /api/v1/auth/register -> 404 (533.042µs)
+    auth_test.go:266: expected 201, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/register_rejects_a_duplicate_email_with_422
+2026/10/13 10:57:35 POST /api/v1/auth/register -> 404 (62.791µs)
+    auth_test.go:266: expected 422, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/register_rejects_a_missing_password
+2026/10/13 10:57:35 POST /api/v1/auth/register -> 404 (13.542µs)
+    auth_test.go:266: expected 422, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/register_rejects_a_blank_email
+2026/10/13 10:57:35 POST /api/v1/auth/register -> 404 (11.541µs)
+    auth_test.go:266: expected 422, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/register_rejects_a_body_that_is_not_JSON
+2026/10/13 10:57:35 POST /api/v1/auth/register -> 404 (10.084µs)
+    auth_test.go:266: expected 422, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/login_issues_an_HS256_token_with_user_id,_role_and_a_24h_exp
+2026/10/13 10:57:35 POST /api/v1/auth/login -> 404 (9.75µs)
+    auth_test.go:266: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/login_with_the_wrong_password_is_a_generic_401
+2026/10/13 10:57:35 POST /api/v1/auth/login -> 404 (18.167µs)
+    auth_test.go:266: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/login_with_an_unknown_email_is_the_same_generic_401
+2026/10/13 10:57:35 POST /api/v1/auth/login -> 404 (9.084µs)
+    auth_test.go:266: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestAuthRegisterAndLogin/login_rejects_a_missing_password_as_invalid_input
+2026/10/13 10:57:35 POST /api/v1/auth/login -> 404 (9.417µs)
+    auth_test.go:266: expected 422, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestAuthRegisterAndLogin (0.02s)
+    --- FAIL: TestAuthRegisterAndLogin/register_creates_a_member_and_answers_with_the_user,_not_the_hash (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/register_rejects_a_duplicate_email_with_422 (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/register_rejects_a_missing_password (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/register_rejects_a_blank_email (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/register_rejects_a_body_that_is_not_JSON (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/login_issues_an_HS256_token_with_user_id,_role_and_a_24h_exp (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/login_with_the_wrong_password_is_a_generic_401 (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/login_with_an_unknown_email_is_the_same_generic_401 (0.00s)
+    --- FAIL: TestAuthRegisterAndLogin/login_rejects_a_missing_password_as_invalid_input (0.00s)
+=== RUN   TestAuthLoginFailuresAreIndistinguishable
+2026/10/13 10:57:36 POST /api/v1/auth/register -> 404 (26.625µs)
+    auth_test.go:276: expected 201, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestAuthLoginFailuresAreIndistinguishable (0.01s)
+=== RUN   TestAuthTokenValidation
+2026/10/13 10:57:36 POST /api/v1/auth/register -> 404 (19.625µs)
+    auth_test.go:290: expected 201, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestAuthTokenValidation (0.01s)
+=== RUN   TestAuthCORSAllowsAuthorizationHeader
+2026/10/13 10:57:36 OPTIONS /api/v1/me -> 204 (4.25µs)
+    auth_test.go:344: preflight must allow the Authorization header, got 204 with "content-type"
+--- FAIL: TestAuthCORSAllowsAuthorizationHeader (0.01s)
+=== RUN   TestRBACMatrix
+2026/10/13 10:57:36 POST /api/v1/auth/register -> 404 (32.167µs)
+    rbac_test.go:46: expected 201, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestRBACMatrix (0.01s)
+=== RUN   TestRBACRoleChange
+2026/10/13 10:57:36 POST /api/v1/auth/register -> 404 (28.292µs)
+    rbac_test.go:124: expected 201, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestRBACRoleChange (0.01s)
+FAIL
+FAIL	homework/internal/app	0.825s
+FAIL

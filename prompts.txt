@@ -1,0 +1,174 @@
+Lesson 9 prompt log (Albums API, variant albums).
+The prompts below were constructed first and then executed, in this order, with Claude Code
+(Claude Fable 5.1) inside this repository. The generated files were reviewed by hand afterwards:
+see README.md, section "Lesson 9 Report", and the "Result / manual edits" notes under each prompt.
+
+=== Prompt 2.1: authentication module (migration, model, bcrypt, JWT, handlers) ===
+
+You are a senior Go engineer working in the repository of "Albums API" (Go module `homework`, Go 1.25,
+net/http ServeMux with method patterns, GORM v1.31 + pgx on PostgreSQL 16, golang-migrate reading SQL
+files from `migrations/`). Generate the authentication module of Lesson 9. Follow the existing code
+conventions exactly: every type and function has a full-sentence comment starting with its name;
+ASCII-only source; imports in three groups (stdlib, third-party, `homework/...`); request structs are
+`XInput` with a value-receiver `Validate() error` built from `requiredProblem(field{...})` and
+`validationError(problems)` in `internal/model/validate.go`; repositories are `gormXRepository{db}`
+with a compile-time interface check and `translate(err)` from `internal/repository/errors.go`
+(unique violation -> ErrConflict, CHECK violation -> ErrInvalidInput, missing row -> ErrNotFound);
+handlers use `readInput(w, r, &in)` (writes 422 on bad JSON or Validate error), `pathID(w, r)`
+(writes 400 invalid_id), `WriteJSON`, `WriteError(w, status, code, message)` and
+`writeRepoError(w, err, "User")`; error envelope `{"error":{"code":"...","message":"..."}}`.
+
+Produce these files and nothing else:
+
+1. `migrations/000003_add_auth_fields.up.sql` and `.down.sql`. The `users` table already has
+   id, email (UNIQUE uq_users_email), role (CHECK chk_users_role IN member/staff/admin), timestamps.
+   The up migration adds ONLY `password_hash TEXT NOT NULL DEFAULT ''` (IF NOT EXISTS); the down
+   migration drops it (IF EXISTS). Do not store any hash in a migration: seeded accounts keep '' and
+   cannot log in until `cmd/bootstrap` sets a password. Start each file with a `-- ` comment saying so.
+
+2. `internal/model/user.go`: add `PasswordHash string` with tags `json:"-" gorm:"column:password_hash"`
+   (never serialised); constants MinPasswordLength = 8, MaxPasswordLength = 72 (bcrypt limit);
+   `ValidRole(role string) bool`; `NormalizeEmail(s string) string` (TrimSpace + ToLower);
+   `RegisterInput{Email, Password}` (both required; password 8..72 bytes; NO role field);
+   `LoginInput{Email, Password}` (both required; password <= 72 bytes); `RoleInput{Role}` (required,
+   must satisfy ValidRole). Tags: `json:"email" validate:"required" example:"reader@albums.local"`,
+   `json:"password" validate:"required" example:"Correct-Horse-Battery-1"`, `json:"role" validate:"required" example:"staff"`.
+
+3. `internal/auth/` (new package; it must import neither `handler` nor `middleware`):
+   - `doc.go`: package comment.
+   - `password.go`: `HashPassword(password string) (string, error)` using
+     `bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)`; `CheckPassword(hash, password string) bool`
+     (`bcrypt.CompareHashAndPassword == nil`; an empty or malformed hash never matches); an exported
+     constant `DummyHash` holding a real cost-10 bcrypt hash of a random string, documented as the hash
+     login compares against when the e-mail is unknown so response time does not reveal accounts.
+   - `token.go`: `const TokenTTL = 24 * time.Hour`; `type Claims struct{ UserID int64; Role string }`;
+     `var ErrInvalidToken`; `IssueToken(secret string, userID int64, role string, ttl time.Duration) (string, error)`
+     signing `jwt.SigningMethodHS256` (github.com/golang-jwt/jwt/v5) with claims `user_id`, `role`,
+     `exp`, `iat` (use a struct embedding jwt.RegisteredClaims so exp/iat are numeric dates);
+     `ParseToken(secret, raw string) (Claims, error)` using `jwt.ParseWithClaims` with
+     `jwt.WithValidMethods([]string{"HS256"})` and `jwt.WithExpirationRequired()`; any failure
+     (malformed, expired, bad signature, alg none, user_id <= 0, empty role) returns ErrInvalidToken.
+   - `context.go`: unexported key type; `WithUser(ctx, Claims) context.Context`;
+     `UserFromContext(ctx) (Claims, bool)`.
+
+4. `internal/repository/user_repository.go`: interface `UserRepository` with
+   `Create(ctx, email, passwordHash string) (model.User, error)` (role member; duplicate -> ErrConflict),
+   `Get(ctx, id int64)`, `GetByEmail(ctx, email string)`, `List(ctx) ([]model.User, error)` (ordered by id,
+   empty slice not nil), `UpdateRole(ctx, id int64, role string) (model.User, error)` (missing -> ErrNotFound;
+   re-read the row after the update), `UpsertAdmin(ctx, email, passwordHash string) (model.User, error)`
+   (INSERT ... ON CONFLICT (email) DO UPDATE SET password_hash, role = 'admin', updated_at = now(), via
+   gorm clause.OnConflict). Add `Users UserRepository` to `Repositories` and wire `&gormUserRepository{db: db}`
+   in `NewGorm` (internal/repository/repository.go).
+
+5. `internal/handler/errors.go`: add `CodeUnauthenticated = "unauthenticated"` and `CodeForbidden = "forbidden"`.
+
+6. `internal/handler/auth_handler.go`: `AuthHandler{users repository.UserRepository; secret string}`,
+   `NewAuthHandler(users, secret)`, `TokenResponse{Token string json:"token"}`.
+   - `Register` (POST /api/v1/auth/register): readInput RegisterInput -> HashPassword -> users.Create with
+     NormalizeEmail(in.Email); repository.ErrConflict -> `WriteError(w, 422, CodeValidation, "email already registered")`;
+     other errors -> writeRepoError; success 201 with the user (the hash is hidden by json:"-").
+   - `Login` (POST /api/v1/auth/login): readInput LoginInput -> users.GetByEmail(NormalizeEmail); when the
+     account is unknown OR its stored hash is empty (an account that never got a password) compare the
+     password against auth.DummyHash anyway, so every failure costs one bcrypt comparison; unknown e-mail,
+     empty hash and wrong password all answer `WriteError(w, 401, CodeUnauthenticated, "invalid credentials")`
+     with identical bodies; a repository error other than ErrNotFound -> writeRepoError; success 200
+     TokenResponse with IssueToken(secret, user.ID, user.Role, auth.TokenTTL).
+   - `Me` (GET /api/v1/me): auth.UserFromContext -> users.Get(claims.UserID) -> 200 user; no claims -> 401;
+     ErrNotFound (the account was deleted after the token was issued) -> 401 unauthenticated, not 404.
+   Swag annotations in the repository style (`@Summary`, `@Tags auth`, `@Accept`, `@Produce`, `@Param`,
+   `@Success`, `@Failure`, `@Router /auth/register [post]`); `Me` gets `@Security BearerAuth`.
+
+7. `internal/handler/user_handler.go`: `UserHandler{users}`, `NewUserHandler(users)`;
+   `List` (GET /api/v1/users) -> 200 array; `UpdateRole` (PUT /api/v1/users/{id}/role): pathID (400) ->
+   readInput RoleInput (422) -> users.UpdateRole (404 "User not found") -> 200 updated user.
+   Both annotated with `@Security BearerAuth` and `@Tags users`.
+
+8. `cmd/api/main.go`: read `JWT_SECRET` once with os.Getenv at the top of run(); return
+   `errors.New("JWT_SECRET is required: a long random string that signs login tokens")` when empty;
+   pass it to the router as `app.Config{JWTSecret: secret}` (the router constructor becomes
+   `app.NewRouter(repos repository.Repositories, cfg app.Config)` and panics when cfg.JWTSecret is empty).
+   Add the swag general annotations as the LAST lines of the comment block above main(), after @BasePath
+   (swag's security parser consumes every line that follows it):
+     // @securityDefinitions.apikey  BearerAuth
+     // @in                          header
+     // @name                        Authorization
+     // @description                 Type "Bearer " followed by the token from POST /auth/login.
+   All annotations, descriptions and example tags stay ASCII (CI scans the generated docs/docs.go).
+
+9. `.env.example`: add JWT_SECRET (a dev-only value with a comment), ADMIN_EMAIL=admin@albums.local and
+   ADMIN_PASSWORD=Albums-Dev-2026 (used by `make bootstrap`). `docker-compose.yml`: pass
+   `JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}` to the api service.
+
+Do not touch internal/app/app.go or internal/middleware (a second prompt covers them). Do not add
+tests (they are written separately). Output each file completely, no placeholders.
+
+=== Prompt 2.2: middleware chain (Auth, RequireRole) and route groups ===
+
+Continue in the same repository ("Albums API", Go module `homework`, net/http ServeMux). The package
+`internal/auth` now provides `ParseToken(secret, raw string) (Claims, error)`, `Claims{UserID int64; Role string}`,
+`WithUser(ctx, Claims) context.Context` and `UserFromContext(ctx) (Claims, bool)`; `internal/handler`
+provides `WriteError(w, status, code, message)`, `CodeUnauthenticated` and `CodeForbidden`;
+`internal/middleware` already has `Logging`, `Recover` and `CORS`, all of type `func(http.Handler) http.Handler`,
+and it already imports `handler` (so `handler` must never import `middleware`). Same conventions as before
+(full-sentence comments, ASCII only, three import groups).
+
+Generate:
+
+1. `internal/middleware/auth.go`: `Auth(secret string) func(http.Handler) http.Handler`. It reads the
+   `Authorization` header, requires the scheme `Bearer` (case-insensitive) followed by a non-empty token,
+   verifies the token with auth.ParseToken (HS256 only; exp required; any other alg, a bad signature, a
+   tampered payload or an expired token are rejected) and calls next with
+   `r.WithContext(auth.WithUser(r.Context(), claims))`. On any failure it writes
+   `handler.WriteError(w, http.StatusUnauthorized, handler.CodeUnauthenticated, <message>)` and returns
+   WITHOUT calling next.ServeHTTP (net/http has no AbortWithStatusJSON; the early return is the abort).
+   Messages must not echo the token.
+
+2. `internal/middleware/rbac.go`: `RequireRole(allowed ...string) func(http.Handler) http.Handler`. It reads
+   the role with auth.UserFromContext: no claims -> 401 unauthenticated; role not in allowed -> 403
+   `forbidden`; otherwise next. It assumes Auth ran first and says so in its comment.
+
+3. `internal/middleware/cors.go`: `Access-Control-Allow-Headers` must list `Content-Type, Authorization`,
+   otherwise browsers cannot send the token. Update `doc.go`'s package comment.
+
+4. `internal/app/app.go`: change the constructor to `NewRouter(repos repository.Repositories, cfg Config) http.Handler`
+   with `type Config struct{ JWTSecret string }`; panic with a clear message when JWTSecret is empty.
+   Build the net/http equivalent of nested route groups with helpers:
+     protected := middleware.Auth(cfg.JWTSecret)
+     staff := func(h http.HandlerFunc) http.Handler { return protected(middleware.RequireRole(model.UserRoleStaff, model.UserRoleAdmin)(h)) }
+     admin := func(h http.HandlerFunc) http.Handler { return protected(middleware.RequireRole(model.UserRoleAdmin)(h)) }
+   and register, in clearly commented groups:
+   - public: GET /health, POST /api/v1/auth/register, POST /api/v1/auth/login, every GET of the catalogue
+     (/genres, /genres/{id}, /artists, /artists/{id}, /albums, /albums/{id}, /albums/{id}/copies,
+     /albums/{id}/availability), GET /swagger/, and the "/" JSON 404 fallback;
+   - protected (any authenticated user): GET /api/v1/me -> protected(http.HandlerFunc(authn.Me));
+   - staff and admin: POST /api/v1/genres, POST /api/v1/artists, POST /api/v1/albums, PUT /api/v1/albums/{id},
+     DELETE /api/v1/albums/{id}, POST /api/v1/albums/{id}/copies, e.g.
+     mux.Handle("POST /api/v1/albums", staff(albums.Create));
+   - admin: GET /api/v1/users, PUT /api/v1/users/{id}/role.
+   Auth must always run before RequireRole. Keep the outer chain Logging(Recover(CORS(mux))) so a CORS
+   preflight (OPTIONS) is answered before any route-level Auth. Construct the handlers with
+   handler.NewAuthHandler(repos.Users, cfg.JWTSecret) and handler.NewUserHandler(repos.Users).
+
+5. Add `@Security BearerAuth` (plus `@Failure 401` and `@Failure 403 {object} ErrorResponse`) to the six
+   catalogue write handlers: GenreHandler.Create, ArtistHandler.Create, AlbumHandler.Create/Update/Delete,
+   CopyHandler.Create.
+
+Output each file completely. No tests (written separately), no other files.
+
+=== Prompt 3.1: AI security review ===
+
+Review this Go net/http API code for security vulnerabilities. Check specifically for: 1) SQL injection
+(raw queries, string concatenation); 2) Mass assignment (binding request JSON directly to DB models);
+3) Missing authentication or RBAC checks; 4) Sensitive data exposure (leaking password hashes in JSON
+responses, secrets or tokens in logs). Output a structured list with line numbers, severity
+(Low/Medium/High), and proposed fixes. Do not rewrite files completely.
+
+Scope (read these files in full): internal/auth/*.go, internal/middleware/*.go,
+internal/handler/auth_handler.go, internal/handler/user_handler.go, internal/handler/album_handler.go,
+internal/handler/copy_handler.go, internal/handler/errors.go, internal/handler/request.go,
+internal/repository/*.go (not the tests), internal/model/user.go, internal/app/app.go, cmd/api/main.go,
+cmd/bootstrap/main.go, docker-compose.yml, .env.example, scripts/smoke.sh. Also consider the GORM logger
+configuration in internal/repository/db.go (what gets logged at Info level) and the token lifecycle
+(24 h stateless JWT, role claim). Report every finding as: id, file:line, severity, category (1-4 or
+other), what an attacker can do, proposed fix (a few lines, no full rewrites). Also list what you checked
+and found correct, so false positives can be triaged.
