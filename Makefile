@@ -1,4 +1,4 @@
-.PHONY: help up down db logs run test migrate-up migrate-down swagger measure er
+.PHONY: help up down db logs run bootstrap test migrate-up migrate-down swagger measure er
 .DEFAULT_GOAL := help
 
 COMPOSE ?= docker compose
@@ -27,6 +27,9 @@ logs:          ## follow the api logs (every SQL statement is logged)
 
 run:           ## run the api on the host against the compose postgres
 	go run ./cmd/api
+
+bootstrap:     ## create or reset the admin account (ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL from .env)
+	go run ./cmd/bootstrap -email $(ADMIN_EMAIL)
 
 test:          ## full suite with the race detector (uses TEST_DATABASE_URL from .env)
 	go test ./... -race -count=1

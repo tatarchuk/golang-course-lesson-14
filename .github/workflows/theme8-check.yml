@@ -1,4 +1,4 @@
-name: Theme 8 check
+name: Theme 8 + Theme 9 check
 
 # Put this file into the student's repository as .github/workflows/theme8-check.yml
 # Every check is reported in the job summary (Actions -> run -> Summary) as PASS/FAIL;
@@ -25,6 +25,8 @@ jobs:
   static:
     name: Static checks
     runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-static-only-for-docker-compose-config   # docker-compose.yml refuses to start without one
     steps:
       - uses: actions/checkout@v4
 
@@ -74,6 +76,12 @@ jobs:
             internal/handler/errors.go internal/handler/album_handler.go internal/handler/artist_handler.go
             internal/handler/genre_handler.go internal/handler/copy_handler.go
             cmd/api/main.go
+            migrations/000003_add_auth_fields.up.sql migrations/000003_add_auth_fields.down.sql
+            internal/auth/password.go internal/auth/token.go internal/auth/context.go
+            internal/middleware/auth.go internal/middleware/rbac.go
+            internal/handler/auth_handler.go internal/handler/user_handler.go
+            internal/repository/user_repository.go cmd/bootstrap/main.go
+            prompts.txt security_audit.md
           )
           missing=""
           for f in "${required[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
@@ -115,8 +123,19 @@ jobs:
           n1_fixed() { grep -rq 'Preload("Artists")' internal/repository && ! grep -rn 'NAIVE' internal; }
           check "N+1 fixed: Preload is used and the NAIVE marker is gone" n1_fixed
 
-          tests_exist() { ls internal/model/*_test.go internal/repository/*_test.go internal/handler/*_test.go > /dev/null; }
-          check "Test files exist for model, repository and handler" tests_exist
+          tests_exist() { ls internal/model/*_test.go internal/repository/*_test.go internal/handler/*_test.go internal/auth/*_test.go internal/middleware/*_test.go > /dev/null; }
+          check "Test files exist for model, repository, handler, auth and middleware" tests_exist
+
+          # Theme 9
+          check "go.mod has golang-jwt/jwt/v5" grep -q 'github.com/golang-jwt/jwt/v5' go.mod
+          check "go.mod has golang.org/x/crypto (bcrypt)" grep -q 'golang.org/x/crypto' go.mod
+          check "User.PasswordHash is never serialised (json tag -)" grep -q 'json:"-"' internal/model/user.go
+          no_role_in_register() { ! sed -n '/type RegisterInput struct/,/^}/p' internal/model/user.go | grep -qi 'role'; }
+          check "RegisterInput has no role field (no mass assignment)" no_role_in_register
+          check ".env.example defines JWT_SECRET" grep -q '^JWT_SECRET=' .env.example
+          check "docker-compose.yml passes JWT_SECRET to the api" grep -q 'JWT_SECRET' docker-compose.yml
+          auth_before_role() { grep -q 'protected(middleware.RequireRole' internal/app/app.go; }
+          check "app.go wraps RequireRole inside Auth (Auth runs first)" auth_before_role
 
           env_not_tracked() { grep -qx '\.env' .gitignore && ! git ls-files --error-unmatch .env 2> /dev/null; }
           check ".env is ignored and not committed" env_not_tracked
@@ -158,6 +177,8 @@ jobs:
       APP_URL: postgres://albums:albums@localhost:5432/albums?sslmode=disable
       TEST_URL: postgres://albums:albums@localhost:5432/albums_test?sslmode=disable
       MIGR_URL: postgres://albums:albums@localhost:5432/albums_migr?sslmode=disable
+      JWT_SECRET: ci-secret-not-for-production
+      ADMIN_PASSWORD: Albums-Dev-2026
     steps:
       - uses: actions/checkout@v4
 
@@ -286,15 +307,19 @@ jobs:
           fi
           pass "Server starts and /health answers 200"
 
+          # Theme 9: the seed accounts have no password; the bootstrap command creates the admin.
+          bootstrap_admin() { DATABASE_URL="$APP_URL" go run ./cmd/bootstrap -email admin@albums.local; }
+          check "cmd/bootstrap creates the administrator (ADMIN_PASSWORD)" bootstrap_admin
+
           BASE=http://localhost:8080/api/v1
 
+          AUTH_TOKEN="" # api() sends it as a bearer token while it is non-empty
           api() {
             local m="$1" p="$2" b="${3:-}"
-            if [ -n "$b" ]; then
-              curl -s -o resp.json -w '%{http_code}' -X "$m" "$BASE$p" -H 'Content-Type: application/json' -d "$b"
-            else
-              curl -s -o resp.json -w '%{http_code}' -X "$m" "$BASE$p"
-            fi
+            local -a args=(-s -o resp.json -w '%{http_code}' -X "$m" "$BASE$p")
+            [ -n "$AUTH_TOKEN" ] && args+=(-H "Authorization: Bearer $AUTH_TOKEN")
+            [ -n "$b" ] && args+=(-H 'Content-Type: application/json' -d "$b")
+            curl "${args[@]}"
           }
           http() { # name expected-status method path [body]
             local name="$1" want="$2"; shift 2
@@ -320,6 +345,44 @@ jobs:
             { [ "$status" = "204" ] || [ "$status" = "200" ]; } && grep -qi '^access-control-allow-origin:' headers.txt
           }
           check "CORS preflight is handled" cors_ok
+
+          # Theme 9: authentication and roles
+          header "Theme 9: authentication and RBAC"
+          http "Anonymous POST /genres -> 401" 401 POST /genres '{"name":"Anon"}'
+          jqis "Error envelope: error.code is unauthenticated" '.error.code' unauthenticated
+          http "POST /auth/register creates a member" 201 POST /auth/register "{\"email\":\"smoke@albums.local\",\"password\":\"$ADMIN_PASSWORD\"}"
+          jqis "Registered role is member" '.role' member
+          no_secrets() { ! grep -qiE 'password|hash|\$2a\$' resp.json; }
+          check "Register response carries no password material" no_secrets
+          MEMBER_ID=$(jq -r '.id' resp.json)
+          http "Register the same e-mail again -> 422" 422 POST /auth/register "{\"email\":\"smoke@albums.local\",\"password\":\"$ADMIN_PASSWORD\"}"
+          jqis "Duplicate e-mail message" '.error.message' 'email already registered'
+          http "Login with a wrong password -> 401" 401 POST /auth/login '{"email":"smoke@albums.local","password":"wrong-password"}'
+          jqis "Error envelope: error.code is unauthenticated" '.error.code' unauthenticated
+          cp resp.json wrong.json
+          http "Login with an unknown e-mail -> 401" 401 POST /auth/login '{"email":"nobody@albums.local","password":"wrong-password"}'
+          same_body() { cmp -s wrong.json resp.json; }
+          check "Both login failures answer with the same body (no account enumeration)" same_body
+          http "Login as the new member" 200 POST /auth/login "{\"email\":\"smoke@albums.local\",\"password\":\"$ADMIN_PASSWORD\"}"
+          AUTH_TOKEN=$(jq -r '.token' resp.json)
+          http "GET /me as member" 200 GET /me
+          jqis "GET /me answers with the token's account" '.email' smoke@albums.local
+          http "Member POST /genres -> 403" 403 POST /genres '{"name":"Member"}'
+          jqis "Error envelope: error.code is forbidden" '.error.code' forbidden
+          http "Member GET /users -> 403" 403 GET /users
+          AUTH_TOKEN=""
+          http "Login as the bootstrapped admin" 200 POST /auth/login "{\"email\":\"admin@albums.local\",\"password\":\"$ADMIN_PASSWORD\"}"
+          AUTH_TOKEN=$(jq -r '.token' resp.json)
+          http "Admin GET /users" 200 GET /users
+          http "Admin promotes the member to staff" 200 PUT "/users/$MEMBER_ID/role" '{"role":"staff"}'
+          jqis "Role is now staff" '.role' staff
+          http "PUT /users/{id}/role with a bad role -> 422" 422 PUT "/users/$MEMBER_ID/role" '{"role":"boss"}'
+          http "PUT /users/{id}/role for an unknown id -> 404" 404 PUT /users/999999/role '{"role":"staff"}'
+          no_hash_in_log() { ! grep -q '\$2a\$' app.log; }
+          check "No bcrypt hash in the server log" no_hash_in_log
+
+          # The catalogue checks run with the admin token (admin passes the staff gate).
+          header "Theme 8: API smoke test (catalogue, as admin)"
 
           # genres and artists
           http "POST /genres creates a genre" 201 POST /genres '{"name":"Smoke Genre"}'

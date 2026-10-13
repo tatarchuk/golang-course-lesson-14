@@ -21,14 +21,19 @@ FAILED=0
 pass() { echo "PASS: $1"; }
 fail() { FAILED=1; echo "FAIL: $1${2:+ -- $2}"; }
 
+# Lesson 9: the bootstrapped administrator (run `make bootstrap` first) and the token
+# api() attaches to every request while AUTH_TOKEN is non-empty.
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@albums.local}
+ADMIN_PASSWORD=${ADMIN_PASSWORD:-Albums-Dev-2026}
+AUTH_TOKEN=""
+
 # api METHOD PATH [BODY] -> prints the status code, body goes to $RESP
 api() {
   local m="$1" p="$2" b="${3:-}"
-  if [ -n "$b" ]; then
-    curl -s -o "$RESP" -w '%{http_code}' -X "$m" "$BASE$p" -H 'Content-Type: application/json' -d "$b"
-  else
-    curl -s -o "$RESP" -w '%{http_code}' -X "$m" "$BASE$p"
-  fi
+  local -a args=(-s -o "$RESP" -w '%{http_code}' -X "$m" "$BASE$p")
+  [ -n "$AUTH_TOKEN" ] && args+=(-H "Authorization: Bearer $AUTH_TOKEN")
+  [ -n "$b" ] && args+=(-H 'Content-Type: application/json' -d "$b")
+  curl "${args[@]}"
 }
 # http NAME EXPECTED_STATUS METHOD PATH [BODY]
 http() {
@@ -56,6 +61,39 @@ status=$(curl -s -D "$RESP.h" -o /dev/null -w '%{http_code}' -X OPTIONS "$BASE/a
 { [ "$status" = "204" ] || [ "$status" = "200" ]; } && grep -qi '^access-control-allow-origin:' "$RESP.h" \
   && pass "CORS preflight is handled" || fail "CORS preflight is handled"
 rm -f "$RESP.h"
+
+# --- Lesson 9: authentication and roles ---------------------------------------------
+http "Anonymous POST /genres -> 401" 401 POST /genres '{"name":"Anon"}'
+jp "Error code is unauthenticated" "d['error']['code']" unauthenticated
+MEMBER="smoke-$TAG@albums.local"
+http "POST /auth/register creates a member" 201 POST /auth/register "{\"email\":\"$MEMBER\",\"password\":\"$ADMIN_PASSWORD\"}"
+jp "Registered role is member" "d['role']" member
+jp "No password material in the response" "any(s in open(sys.argv[1]).read().lower() for s in ('password','hash','\$2a\$'))" False
+MEMBER_ID=$(field value "['id']")
+http "Register the same e-mail again -> 422" 422 POST /auth/register "{\"email\":\"$MEMBER\",\"password\":\"$ADMIN_PASSWORD\"}"
+http "Login with a wrong password -> 401" 401 POST /auth/login "{\"email\":\"$MEMBER\",\"password\":\"wrong-password\"}"
+http "Login with an unknown e-mail -> 401" 401 POST /auth/login "{\"email\":\"nobody-$TAG@albums.local\",\"password\":\"wrong-password\"}"
+http "Login as the new member" 200 POST /auth/login "{\"email\":\"$MEMBER\",\"password\":\"$ADMIN_PASSWORD\"}"
+AUTH_TOKEN=$(field value "['token']")
+http "GET /me as member" 200 GET /me
+jp "GET /me answers with the token's account" "d['email']" "$MEMBER"
+http "Member POST /genres -> 403" 403 POST /genres '{"name":"Member"}'
+jp "Error code is forbidden" "d['error']['code']" forbidden
+http "Member GET /users -> 403" 403 GET /users
+AUTH_TOKEN=""
+ADMIN_LOGIN="{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASSWORD\"}"
+status=$(api POST /auth/login "$ADMIN_LOGIN")
+if [ "$status" != "200" ]; then
+  fail "Login as $ADMIN_EMAIL" "run 'make bootstrap' (or: docker compose exec -e ADMIN_PASSWORD=... api /app/bootstrap) first"
+  echo "== done: some checks FAILED"; exit 1
+fi
+pass "Login as the bootstrapped admin"
+AUTH_TOKEN=$(field value "['token']")
+http "Admin GET /users" 200 GET /users
+http "Admin promotes the member to staff" 200 PUT "/users/$MEMBER_ID/role" '{"role":"staff"}'
+jp "Role is now staff" "d['role']" staff
+http "PUT /users/{id}/role with a bad role -> 422" 422 PUT "/users/$MEMBER_ID/role" '{"role":"boss"}'
+# The catalogue checks below run with the admin token (admin passes the staff gate).
 
 # genres and artists
 http "POST /genres creates a genre" 201 POST /genres "{\"name\":\"Smoke Genre $TAG\"}"

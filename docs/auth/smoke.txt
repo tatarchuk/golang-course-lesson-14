@@ -1,0 +1,80 @@
+== smoke test against http://localhost:8080 (tag 1791879690)
+PASS: /health returns status ok
+PASS: Swagger UI is served
+PASS: CORS preflight is handled
+PASS: Anonymous POST /genres -> 401
+PASS: Error code is unauthenticated
+PASS: POST /auth/register creates a member
+PASS: Registered role is member
+PASS: No password material in the response
+PASS: Register the same e-mail again -> 422
+PASS: Login with a wrong password -> 401
+PASS: Login with an unknown e-mail -> 401
+PASS: Login as the new member
+PASS: GET /me as member
+PASS: GET /me answers with the token's account
+PASS: Member POST /genres -> 403
+PASS: Error code is forbidden
+PASS: Member GET /users -> 403
+PASS: Login as the bootstrapped admin
+PASS: Admin GET /users
+PASS: Admin promotes the member to staff
+PASS: Role is now staff
+PASS: PUT /users/{id}/role with a bad role -> 422
+PASS: POST /genres creates a genre
+PASS: Duplicate genre name -> 409
+PASS: Error envelope: error.code is conflict
+PASS: POST /genres with an empty name -> 422
+PASS: GET /genres/{id}
+PASS: GET /genres lists genres
+PASS: POST /artists creates an artist
+PASS: POST /artists creates a second artist
+PASS: GET /artists/{id}
+PASS: GET /artists lists artists
+PASS: GET /artists/{unknown} -> 404
+PASS: POST /albums creates an album with relations
+PASS: Created album contains its artist
+PASS: Created album contains its genre
+PASS: Duplicate title + label -> 409
+PASS: Unknown artist id -> 422
+PASS: Error envelope: error.code is invalid_reference
+PASS: Unknown artist was NOT silently created
+PASS: Unknown genre -> 422
+PASS: Missing title -> 422
+PASS: Error envelope: error.code is validation_error
+PASS: Empty artist_ids -> 422
+PASS: GET /albums/{id}
+PASS: GET /albums/{id} returns artists
+PASS: GET /albums/{unknown} -> 404
+PASS: Error envelope: error.code is not_found
+PASS: POST /albums/{id}/copies creates a copy
+PASS: Copy status defaults to available
+PASS: POST second copy
+PASS: POST third copy (lost)
+PASS: Duplicate inventory number -> 409
+PASS: Copy for an unknown album -> 404
+PASS: Invalid copy status -> 422
+PASS: GET /albums/{id}/copies
+PASS: The album has 3 copies
+PASS: GET /albums/{id}/availability
+PASS: availability.album_id
+PASS: availability.total_copies is 3
+PASS: availability.available_copies is 2
+PASS: availability of an unknown album -> 404
+PASS: PUT /albums/{id} updates the album and replaces artists
+PASS: Title was updated
+PASS: Artists were replaced (count)
+PASS: Artists were replaced (id)
+PASS: PUT /albums/{unknown} -> 404
+PASS: GET /albums?genre_id filters by genre
+PASS: Genre filter returns exactly one album
+PASS: GET /albums?limit=100
+PASS: Seeded data is visible (at least 8 albums)
+PASS: Every listed album has a genre and artists
+PASS: Pagination: limit=2 returns 2 albums
+PASS: limit=2 gives exactly 2 items
+PASS: GET /albums uses a constant number of SELECTs (4) regardless of the number of albums
+PASS: DELETE /albums/{id} -> 204
+PASS: GET deleted album -> 404
+PASS: DELETE /albums/{unknown} -> 404
+== done: all checks passed
