@@ -57,11 +57,16 @@ docker compose down                                # зупинити; дані 
 `change-me…` з `.env.example` (`validateSecret` у `cmd/api/main.go`). PostgreSQL опубліковано лише
 на `127.0.0.1`.
 
-<!-- TODO (крок 7): скриншоти docs/screenshots/catalog.jpg, catalog-search.jpg, login.jpg і посилання на них;
-     одне речення про те, що образ більше не містить теки migrations/ (вбудовані міграції). -->
-Скриншоти Теми 8: [Swagger UI з виконаним `GET /api/v1/albums`](docs/screenshots/swagger-get-albums-200.jpg)
-та [огляд API](docs/screenshots/swagger-overview.jpg). Текстові докази Теми 9: [docs/auth/token-flow.txt](docs/auth/token-flow.txt)
-і [docs/auth/smoke.txt](docs/auth/smoke.txt). Докази Теми 10 збираються в [docs/web/](docs/web/).
+Образ API більше не містить теки `migrations/`: шаблони, статика й SQL-міграції вбудовані в обидва бінарники,
+тож `/app` в образі — це лише `api` і `bootstrap`. Вебінтерфейс після старту: <http://localhost:8080/catalog>
+(вхід — <http://localhost:8080/login>, адміністратор із кроку 4).
+
+Скриншоти Теми 10 (headless Chrome проти бінарника, запущеного з порожньої теки): [каталог](docs/screenshots/catalog.png),
+[пошук `kid`](docs/screenshots/catalog-search.png), [сторінка входу](docs/screenshots/login.png). Скриншоти Теми 8:
+[Swagger UI з виконаним `GET /api/v1/albums`](docs/screenshots/swagger-get-albums-200.jpg) та
+[огляд API](docs/screenshots/swagger-overview.jpg). Текстові докази Теми 9: [docs/auth/token-flow.txt](docs/auth/token-flow.txt)
+і [docs/auth/smoke.txt](docs/auth/smoke.txt); Теми 10 — у [docs/web/](docs/web/) (тести до і після, ізоляція,
+аудит шаблонів, cookie-сценарій, SQL-лог сторінки каталогу, smoke).
 
 ### Запуск на хості
 
@@ -168,7 +173,7 @@ cookie jar, матриця видалення (анонім `401`, member `403`,
   додає заголовок `Authorization` до запитів.
 - Специфікація OpenAPI: [docs/swagger.yaml](docs/swagger.yaml), [docs/swagger.json](docs/swagger.json).
 - Runbook із `curl`-запитами на всі випадки контракту, включно з отриманням токена та випадками
-  `401`/`403`: [docs/CURL.md](docs/CURL.md). <!-- TODO (крок 7): + розділ про вебмаршрути з cookie jar і HX-Request. -->
+  `401`/`403`, і розділом 8 про вебінтерфейс (cookie jar, `HX-Request`, видалення рядка, логаут): [docs/CURL.md](docs/CURL.md).
 
 Специфікацію згенеровано утилітою [swag](https://github.com/swaggo/swag) з анотацій у `cmd/api/main.go`
 та обробниках `internal/handler/*_handler.go`; після їх зміни: `make swagger`. Усі анотації лишаються
@@ -440,24 +445,31 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 
 Рішення Теми 10:
 
-<!-- TODO (кроки 2-6): після реалізації підтвердити кожен пункт посиланнями file:line. -->
-- **Дві поверхні аутентифікації.** API приймає лише `Authorization: Bearer`; вебмаршрути — лише cookie
-  `albums_token` (`CookieAuth`). Cookie без заголовка не дає доступу до API, заголовок без cookie — до
-  вебмаршрутів, тож CSRF-поверхня обмежена вебмаршрутами, які захищені `SameSite=Lax` і
-  `http.CrossOriginProtection`.
-- **Анонімний запит замість помилки.** `CookieAuth` ніколи не відхиляє запит: відсутня чи хибна cookie
-  означає анонімного відвідувача (публічний каталог рендериться без кнопок), а `401`/`403` дає наявний
-  `RequireRole` на маршруті видалення — ті самі коди й конверт помилок, що й в API.
-- **Порожній `200` замість `204`** на `DELETE /web/albums/{id}`: HTMX не виконує swap на `204`.
-  API-маршрут `DELETE /api/v1/albums/{id}` і далі відповідає `204`.
-- **Пошук і наявність без N+1.** `ListOptions.Query` додає `ILIKE` за назвою й виконавцем до того
-  самого запиту з `Preload`; наявність примірників для всієї сторінки читається одним запитом
-  (`AvailabilityForAlbums`), тож сторінка каталогу коштує сталу кількість `SELECT`.
-- **Один набір шаблонів на сторінку.** `layout.html` + партіали розбираються один раз, кожна сторінка
-  — клон із власним `content`; відповідь спершу рендериться в буфер, тож помилка шаблону дає `500`, а не
-  пів сторінки. Лише `html/template`, без `template.HTML`.
-- **Усе в бінарнику.** Шаблони, статика (включно з HTMX) і міграції вбудовані через `go:embed`;
-  `MIGRATIONS_PATH` — лише перевизначення для розробки; образ Docker більше не копіює `migrations/`.
+- **Дві поверхні аутентифікації.** API приймає лише `Authorization: Bearer` (`internal/middleware/auth.go:14`);
+  вебмаршрути — лише cookie `albums_token` (`internal/middleware/cookie.go:16`; маршрути в
+  `internal/app/app.go:92-106`). Cookie без заголовка не дає доступу до API, заголовок без cookie — до
+  вебмаршрутів (`TestWebDeleteRow`: Bearer → `401`), тож CSRF-поверхня обмежена вебмаршрутами, які захищені
+  `SameSite=Lax` (`internal/handler/web/auth.go:59-67`) і `http.CrossOriginProtection` (`app.go:96-99`, відповідь —
+  конверт `403 forbidden`).
+- **Анонімний запит замість помилки.** `CookieAuth` ніколи не відхиляє запит: відсутня чи хибна cookie означає
+  анонімного відвідувача (публічний каталог рендериться без кнопок), а `401`/`403` дає наявний `RequireRole` на
+  маршруті видалення — ті самі коди й конверт помилок, що й в API (`app.go:93-95`, `TestCookieAuthWithRequireRole`).
+- **Порожній `200` замість `204`** на `DELETE /web/albums/{id}` (`internal/handler/web/catalog.go:63-73`): HTMX не
+  виконує swap на `204`, а порожній `200` з `hx-swap="outerHTML"` прибирає рядок. API-маршрут
+  `DELETE /api/v1/albums/{id}` і далі відповідає `204`.
+- **Пошук і наявність без N+1.** `ListOptions.Query` додає `ILIKE ... ESCAPE '\'` за назвою й виконавцем до того
+  самого запиту з `Preload` (`internal/repository/album_repository.go:92-97`, екранування в `likePattern`, `:239`);
+  наявність примірників для всієї сторінки читається одним `GROUP BY` (`internal/repository/copy_repository.go:72`,
+  виклик в `internal/handler/web/view.go:76-85`), тож `GET /catalog` коштує 5 `SELECT` незалежно від кількості
+  альбомів ([docs/web/queries-catalog.txt](docs/web/queries-catalog.txt)).
+- **Один набір шаблонів на сторінку.** `layout.html` + партіали розбираються один раз, кожна сторінка — клон із
+  власним `content` (`internal/handler/web/templates.go:28-44`); відповідь спершу рендериться в буфер
+  (`templates.go:58-68`), тож помилка шаблону дає `500`, а не пів сторінки. Лише `html/template`, без
+  `template.HTML` ([docs/web/template-audit.txt](docs/web/template-audit.txt)).
+- **Усе в бінарнику.** Шаблони, статика (включно з HTMX) і міграції вбудовані через `go:embed` (`web/templates.go:8`,
+  `web/static.go:8`, `migrations/embed.go:11`); `MIGRATIONS_PATH` — лише перевизначення для розробки
+  (`cmd/api/main.go:121`, `internal/repository/migrate.go:22,46`); образ Docker більше не копіює `migrations/`;
+  статика роздається через `StaticFiles` без лістингу тек (`internal/handler/web/static.go:14`).
 
 ## Lesson 10 Report: Full-Stack Go з HTMX та go:embed
 
@@ -465,13 +477,12 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 
 | Частина | Що потрібно | Стан |
 |---|---|---|
-| 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | <!-- TODO --> у роботі |
+| 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | готово (крок 7): розділи нижче, [docs/web/template-audit.txt](docs/web/template-audit.txt), [docs/web/isolation.txt](docs/web/isolation.txt), скриншоти |
 | 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | готово: промпти складено до генерації (крок 1), виконано у кроках 3 і 4 |
 | 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 тести на фейках готово (крок 5) |
 
 ### Частина 1. Архітектура вебшару та аудит автоекранування
 
-<!-- TODO (крок 7): розгорнути після реалізації; нижче - проєктне рішення, прийняте до початку роботи. -->
 **Де живе JWT у браузері.** Вебінтерфейс отримує той самий HS256 JWT, що й API, але не у відповіді JSON,
 а в cookie `albums_token` з прапорцями `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=86400` (= TTL
 токена) і `Secure` за TLS (`COOKIE_SECURE=true`). `localStorage` для серверного застосунку гірший з двох
@@ -483,23 +494,51 @@ JavaScript, якого Тема 10 уникає. Ціна cookie — CSRF: бр�
 (перевіряє `Sec-Fetch-Site`/`Origin` для небезпечних методів) і жорстке розділення: API не читає cookie,
 вебмаршрути не читають `Authorization`.
 
-**Аудит шаблонів.** <!-- TODO (крок 7): результати grep -rn '"text/template"' і grep -rn 'template.HTML' (обидва порожні),
-посилання на docs/web/template-audit.txt, пояснення, де саме autoescaping рятує (назва альбому з <b>, параметр q у value="",
-id у hx-delete). -->
+У коді: cookie ставить `sessionCookie` (`internal/handler/web/auth.go:59-67`) після `handler.Authenticate`
+(`internal/handler/authenticate.go`) — тієї самої перевірки, що й в API, тож невідомий e-mail і хибний пароль дають
+побайтово однакову сторінку `401` без `Set-Cookie` (`TestWebLoginAndLogout`); `CookieAuth` читає лише cookie
+(`internal/middleware/cookie.go:16`), `Auth` — лише заголовок; вебгрупа в `internal/app/app.go:88-106` обгорнута
+`http.CrossOriginProtection` з відповіддю-конвертом `403`. Сценарій з реальними відповідями (вхід, cookie з
+`#HttpOnly_` у jar, матриця видалення, логаут): [docs/web/cookie-flow.txt](docs/web/cookie-flow.txt).
+
+**Аудит шаблонів** ([docs/web/template-audit.txt](docs/web/template-audit.txt)). `grep -rn '"text/template"'
+--include='*.go' .` і `grep -rnE 'template\.HTML\b' --include='*.go' cmd internal web` порожні: єдине місце розбору
+шаблонів — `internal/handler/web/templates.go` з `html/template.ParseFS`, і жодне значення не позначається як
+безпечний HTML (`template.HTML`, `template.JS`, `template.URL`, `template.HTMLAttr` не використовуються). Контексти
+динамічних значень: назва, виконавці, жанр, лейбл, рік і лічильники — текст у `<td>`; e-mail і роль — текст у
+`<span>`; `q` — значення атрибута `value="..."` поля пошуку; `.ID` — атрибути `id="album-N"` і
+`hx-delete="/web/albums/N"` (int64); повідомлення про помилку входу — текст у `<p>`. Живу перевірку проти бінарника
+зроблено з альбомом `<script>alert("x")</script> & "quotes"` і запитом `?q=<b>x</b>`: у сторінці назва стає
+`&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#34;quotes&#34;`, запит у полі — `value="&lt;b&gt;x&lt;/b&gt;"`, а
+фрагмент рядків не містить жодного `<script>`; те саме фіксують `TestCatalogPageRendersRowsAndEscapes` (пакет `web`),
+`TestCatalogPage` (фейки) і `TestWebCatalogPage` (приймальний). CI-перевірки «Only html/template» і «template.HTML
+is never used» стежать, щоб так і лишалося.
 
 ### Тест ізоляції єдиного бінарника
 
-<!-- TODO (крок 7): виконати і вставити вивід docs/web/isolation.txt (file/otool, запуск з порожньої теки, curl /catalog, /static/*),
-скриншоти. -->
+Рецепт завдання 1.2 і те, що зроблено:
+
 ```sh
 make build                                        # CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/api ./cmd/api
 DIR=$(mktemp -d /tmp/verify_albums.XXXXXX) && cp bin/api "$DIR"/ && cd "$DIR"
-set -a; . ~/repo/golang-course-lesson-10/.env; set +a; unset MIGRATIONS_PATH
+set -a; . "$OLDPWD/.env"; set +a; unset MIGRATIONS_PATH     # лише DATABASE_URL і JWT_SECRET мають значення
 ./api                                             # лише DATABASE_URL і JWT_SECRET; ні web/, ні migrations/ поруч немає
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/catalog
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/app.css
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/htmx.min.js
 ```
+
+Виконано 2026-10-16 ([docs/web/isolation.txt](docs/web/isolation.txt)): `bin/api` (25 МБ, `CGO_ENABLED=0`,
+`-trimpath -ldflags='-s -w'`) скопійовано сам у порожню теку `/tmp/verify_albums.*` і запущено лише з `DATABASE_URL`
+та `JWT_SECRET`; у лозі `migrations: applying the embedded set` і `schema version 3`, після чого `/catalog` →
+`200 text/html` з усіма 10 seed-альбомами, `/catalog?q=kid` → один рядок, `/static/app.css` → `200 text/css`,
+`/static/htmx.min.js` → `200 text/javascript` (52 182 байти, htmx 2.0.11), `/web/albums?q=kid` з `HX-Request` →
+`200` лише `<tr>`, без заголовка → `303` на `/catalog?q=kid`, `/static/` → `404`. На macOS `otool -L` показує лише
+системні бібліотеки (так злінковано кожен Go-бінарник на Darwin, власних залежностей немає), а збірка `GOOS=linux`
+з тими самими прапорцями — `ELF 64-bit ... statically linked`; те саме перевіряє CI (`file bin/api` на Ubuntu і
+запуск із `mktemp -d`). Браузер (headless Chrome 155 проти того самого процесу): [каталог](docs/screenshots/catalog.png),
+[пошук](docs/screenshots/catalog-search.png), [вхід](docs/screenshots/login.png). SQL-лог однієї сторінки:
+[docs/web/queries-catalog.txt](docs/web/queries-catalog.txt), 5 `SELECT`.
 
 ### Частина 2. Промпти для генерації коду
 

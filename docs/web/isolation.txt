@@ -1,0 +1,74 @@
+# Lesson 10, Task 1.2: single-binary isolation test, run on 2026-10-16 against the compose PostgreSQL.
+# Every command is printed before its output. The binary is copied alone into an empty directory and
+# started with nothing but DATABASE_URL and JWT_SECRET: no MIGRATIONS_PATH, no web/, no migrations/.
+
+$ make build
+CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/api ./cmd/api
+$ ls -l bin/api | awk '{print $5" bytes"}'
+24966130 bytes
+$ file bin/api
+bin/api: Mach-O 64-bit executable arm64
+$ otool -L bin/api   # macOS: every Go binary links the system libraries, there is no libc of its own; the Linux build below is fully static
+bin/api:
+	/usr/lib/libSystem.B.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/usr/lib/libresolv.9.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 0.0.0, current version 0.0.0)
+	/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 0.0.0, current version 0.0.0)
+$ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /tmp/api-linux ./cmd/api && file /tmp/api-linux
+/tmp/api-linux: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=aL9ChP671vHrhxO3G6tL/gxKQf_12XehIaTyYCpPb/WOCZun2jaqkeEfY72eh6/XZV3L3vR7OHaqSzN5Chl, BuildID[sha1]=35bfb4b777e7bf067e41ed6a6891f29b1fd7243f, stripped
+
+$ DIR=$(mktemp -d /tmp/verify_albums.XXXXXX) && cp bin/api "$DIR/" && cd "$DIR" && ls -la
+total 48768
+drwx------@  3 oleksandr.tatarchuk  wheel        96 Oct 16 16:41 .
+drwxrwxrwt  12 root                 wheel       384 Oct 16 16:41 ..
+-rwxr-xr-x@  1 oleksandr.tatarchuk  wheel  24966130 Oct 16 16:41 api
+
+$ env | grep -E '^(DATABASE_URL|JWT_SECRET|MIGRATIONS_PATH|PORT)=' | sed 's/=.*/=<set>/'
+PORT=<set>
+JWT_SECRET=<set>
+DATABASE_URL=<set>
+(MIGRATIONS_PATH is unset, PORT falls back to 8080)
+
+$ ./api > run.log 2>&1 &
+$ grep -E 'migrations|listening' run.log
+2026/10/16 16:41:43 migrations: applying the embedded set
+2026/10/16 16:41:43 migrations: schema version 3 (dirty=false)
+2026/10/16 16:41:43 listening on :8080
+
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/health'
+200 application/json 16 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/catalog'
+200 text/html; charset=utf-8 3102 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/catalog?q=kid'
+200 text/html; charset=utf-8 1372 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/static/app.css'
+200 text/css; charset=utf-8 2562 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/static/htmx.min.js'
+200 text/javascript; charset=utf-8 52182 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' 'localhost:8080/login'
+200 text/html; charset=utf-8 885 bytes
+$ curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download} bytes' -H 'HX-Request: true' 'localhost:8080/web/albums?q=kid'
+200 text/html; charset=utf-8 183 bytes
+$ curl -s -o /dev/null -w '%{http_code} -> %{redirect_url}' 'localhost:8080/web/albums?q=kid'   # without HX-Request
+303 -> http://localhost:8080/catalog?q=kid
+$ curl -s -o /dev/null -w '%{http_code}' localhost:8080/static/   # no directory listing
+404
+
+$ curl -s localhost:8080/catalog | grep -c '<tr id="album-'   # seed albums rendered
+10
+
+$ curl -s -H 'HX-Request: true' 'localhost:8080/web/albums?q=kid'
+<tr id="album-7">
+  <td class="title">Kid A</td>
+  <td>Radiohead</td>
+  <td>rock</td>
+  <td class="year">2000</td>
+  <td>Parlophone</td>
+  <td class="availability">2/2</td>
+</tr>
+
+# Browser check: headless Google Chrome 155, window 1280x900, against the same process:
+#   docs/screenshots/catalog.png (GET /catalog), catalog-search.png (GET /catalog?q=kid), login.png (GET /login).
+
+$ kill %1   # graceful shutdown
+2026/10/16 16:41:48 shutting down

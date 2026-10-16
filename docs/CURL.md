@@ -21,7 +21,7 @@ Automated checks:
 
 ```sh
 make test                                         # go test ./... -race (TEST_DATABASE_URL from .env)
-scripts/smoke.sh http://localhost:8080            # the CI API flow against a running server
+scripts/smoke.sh http://localhost:8080            # the CI API and web UI flow against a running server (100 checks)
 scripts/measure_n1.sh http://localhost:8080       # SELECT count and latency of GET /api/v1/albums
 ```
 
@@ -282,3 +282,46 @@ docker compose logs --no-log-prefix api | grep -c SELECT     # raw count since t
 Before the fix, with the relations loaded in a loop, one `GET /api/v1/albums?limit=100` over the 10 demo albums
 issued 21 SELECTs (1 + 2 per album); with `Preload("Artists").Preload("Genre")` it issues 4, however many
 albums there are. Raw outputs of both measurements and of the smoke replay: `docs/n1/`.
+
+## 8. Web UI (Lesson 10): cookie session and htmx
+
+The same binary serves a server-rendered catalogue. The browser never sees a token: `POST /login` stores
+the JWT in the HttpOnly cookie `albums_token`, the web routes read that cookie only, and the API keeps
+reading `Authorization: Bearer` only. A full transcript with real responses: `docs/web/cookie-flow.txt`.
+
+```sh
+WEB=http://localhost:8080
+
+# the public catalogue page and its static files (all served from the embedded filesystem)
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $WEB/catalog              # 200 text/html; charset=utf-8
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $WEB/static/app.css       # 200 text/css; charset=utf-8
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' $WEB/static/htmx.min.js   # 200 text/javascript; charset=utf-8
+
+# the live search: htmx asks for rows only (HX-Request); a plain browser request is sent to the page
+curl -s -H 'HX-Request: true' "$WEB/web/albums?q=kid"                                 # <tr id="album-7"> ... </tr>
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "$WEB/web/albums?q=kid"      # 303 http://localhost:8080/catalog?q=kid
+
+# log in as the bootstrapped admin: 303 to /catalog and the HttpOnly cookie lands in the jar
+curl -s -i -c jar -X POST $WEB/login --data-urlencode 'email=admin@albums.local' --data-urlencode 'password=Albums-Dev-2026' | grep -E '^(HTTP|Set-Cookie)'
+# HTTP/1.1 303 See Other
+# Set-Cookie: albums_token=<jwt>; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax
+
+# the page now shows the account and a Delete button per row
+curl -s -b jar $WEB/catalog | grep -E 'class="user"|hx-delete' | head -2
+
+# delete a row the way htmx does: an empty 200 (htmx would not swap on a 204), then the row is gone
+curl -s -i -b jar -X DELETE $WEB/web/albums/10 | head -1                       # HTTP/1.1 200 OK
+curl -s -X DELETE $WEB/web/albums/9                                             # anonymous -> 401 {"error":{"code":"unauthenticated",...}}
+curl -s -b jar -H 'Sec-Fetch-Site: cross-site' -X DELETE $WEB/web/albums/9      # CSRF attempt -> 403 {"error":{"code":"forbidden","message":"cross-origin request refused"}}
+curl -s -X DELETE $WEB/web/albums/9 -H "Authorization: Bearer $TOKEN"           # the API token is not a web session -> 401
+
+# log out: the cookie is expired (the token itself stays valid until its exp, like every token here)
+curl -s -i -b jar -c jar -X POST $WEB/logout | grep -E '^(HTTP|Set-Cookie)'
+# HTTP/1.1 303 See Other
+# Set-Cookie: albums_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+```
+
+A member's cookie gets `403 forbidden` on the delete route and sees no Delete button on the page. A
+wrong password or an unknown e-mail on `POST /login` gets the same `401` page with "invalid credentials"
+and no cookie. Behind TLS set `COOKIE_SECURE=true`, so the cookie also carries `Secure`. The search is a
+case-insensitive match on the album title or an artist name; `%`, `_` and `\` are searched literally.

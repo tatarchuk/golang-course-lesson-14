@@ -1,0 +1,56 @@
+# Lesson 10 cookie session flow against the binary of the isolation test (2026-10-16). Every command is
+# printed before its response. Cookie and token values are cut to their first 24 characters.
+# The administrator is the bootstrapped admin@albums.local; the member was registered through the API.
+
+$ curl -s -i -c jar -X POST localhost:8080/login --data-urlencode 'email=admin@albums.local' --data-urlencode 'password=<dev password>' | grep -E '^(HTTP|Location|Set-Cookie)'
+HTTP/1.1 303 See Other
+Location: /catalog
+Set-Cookie: albums_token=eyJhbGciOiJIUzI1NiIsInR5...<redacted>; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax
+
+$ grep -c '^#HttpOnly_' jar   # curl stores HttpOnly cookies with this marker
+1
+
+$ curl -s -b jar localhost:8080/catalog | grep -E 'class="user"|action="/logout"|hx-delete' | head -4
+<span class="user">admin@albums.local (admin)</span>
+<form method="post" action="/logout" class="inline"><button type="submit">Log out</button></form>
+<td class="actions"><button type="button" class="danger" hx-delete="/web/albums/1" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this album?">Delete</button></td>
+<td class="actions"><button type="button" class="danger" hx-delete="/web/albums/2" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this album?">Delete</button></td>
+
+$ curl -s -i -c mjar -X POST localhost:8080/login --data-urlencode 'email=web-flow-1792158100@albums.local' --data-urlencode 'password=<password>' | grep -E '^(HTTP|Set-Cookie)'
+HTTP/1.1 303 See Other
+Set-Cookie: albums_token=eyJhbGciOiJIUzI1NiIsInR5...<redacted>; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax
+
+$ curl -s -b mjar localhost:8080/catalog | grep -c hx-delete   # a member sees no delete buttons
+0
+
+# The album to delete was created through the API as the admin: id 11, title "Cookie Flow 1792158100".
+$ curl -s -w ' -> HTTP %{http_code}' -X DELETE localhost:8080/web/albums/11   # anonymous
+{"error":{"code":"unauthenticated","message":"authentication required"}}
+ -> HTTP 401
+$ curl -s -w ' -> HTTP %{http_code}' -b mjar -X DELETE localhost:8080/web/albums/11   # member cookie
+{"error":{"code":"forbidden","message":"this action requires role staff or admin"}}
+ -> HTTP 403
+$ curl -s -w ' -> HTTP %{http_code}' -X DELETE localhost:8080/web/albums/11 -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5...<redacted>'   # the API token is not a web session
+{"error":{"code":"unauthenticated","message":"authentication required"}}
+ -> HTTP 401
+$ curl -s -w ' -> HTTP %{http_code}' -b jar -H 'Sec-Fetch-Site: cross-site' -X DELETE localhost:8080/web/albums/11   # CSRF attempt with a valid cookie
+{"error":{"code":"forbidden","message":"cross-origin request refused"}}
+ -> HTTP 403
+$ curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/v1/albums/11   # still there
+200
+
+$ curl -s -i -b jar -X DELETE localhost:8080/web/albums/11 | grep -E '^(HTTP|Content-Length)'   # admin cookie: empty 200, htmx removes the row
+HTTP/1.1 200 OK
+Content-Length: 0
+$ curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/v1/albums/11   # gone
+404
+$ curl -s -H 'HX-Request: true' 'localhost:8080/web/albums?q=Cookie+Flow+1792158100'
+<tr class="empty"><td colspan="7">No albums match your search.</td></tr>
+$ curl -s -i -b jar -c jar -X POST localhost:8080/logout | grep -E '^(HTTP|Location|Set-Cookie)'
+HTTP/1.1 303 See Other
+Location: /catalog
+Set-Cookie: albums_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax
+$ grep -c albums_token jar   # curl dropped the expired cookie
+0
+$ curl -s -b jar localhost:8080/catalog | grep -c 'href="/login"'   # anonymous again
+1

@@ -1,0 +1,60 @@
+# Lesson 10, Task 1.1: manual audit of the templates (2026-10-16).
+
+$ grep -rn '"text/template"' --include='*.go' .   # must be empty: only html/template is imported
+(no matches)
+
+$ grep -rnE 'template\.HTML\b' --include='*.go' cmd internal web   # must be empty: nothing is ever marked as safe HTML
+(no matches)
+
+$ grep -rn '"html/template"' --include='*.go' . | grep -v _test.go   # the one place templates are parsed
+./internal/handler/web/templates.go:6:	"html/template"
+
+$ grep -n '{{' web/templates/*.html web/templates/partials/*.html   # every template action
+web/templates/catalog.html:1:{{define "title"}}Catalogue - Albums{{end}}
+web/templates/catalog.html:2:{{define "content"}}
+web/templates/catalog.html:5:  <input type="search" name="q" value="{{.Query}}" placeholder="Search by album or artist" autocomplete="off"
+web/templates/catalog.html:18:      {{if .CanDelete}}<th class="actions"></th>{{end}}
+web/templates/catalog.html:22:    {{template "album_rows" .}}
+web/templates/catalog.html:26:{{end}}
+web/templates/layout.html:6:  <title>{{block "title" .}}Albums{{end}}</title>
+web/templates/layout.html:14:      {{if .User}}
+web/templates/layout.html:15:      <span class="user">{{.User.Email}} ({{.User.Role}})</span>
+web/templates/layout.html:17:      {{else}}
+web/templates/layout.html:19:      {{end}}
+web/templates/layout.html:23:    {{block "content" .}}{{end}}
+web/templates/login.html:1:{{define "title"}}Log in - Albums{{end}}
+web/templates/login.html:2:{{define "content"}}
+web/templates/login.html:4:{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+web/templates/login.html:12:{{end}}
+web/templates/partials/album_row.html:1:{{define "album_row"}}
+web/templates/partials/album_row.html:2:<tr id="album-{{.ID}}">
+web/templates/partials/album_row.html:3:  <td class="title">{{.Title}}</td>
+web/templates/partials/album_row.html:4:  <td>{{.Artists}}</td>
+web/templates/partials/album_row.html:5:  <td>{{.Genre}}</td>
+web/templates/partials/album_row.html:6:  <td class="year">{{with .ReleaseYear}}{{.}}{{end}}</td>
+web/templates/partials/album_row.html:7:  <td>{{.Label}}</td>
+web/templates/partials/album_row.html:8:  <td class="availability">{{.Available}}/{{.Total}}</td>
+web/templates/partials/album_row.html:9:  {{if .CanDelete}}<td class="actions"><button type="button" class="danger" hx-delete="/web/albums/{{.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this album?">Delete</button></td>{{end}}
+web/templates/partials/album_row.html:11:{{end}}
+web/templates/partials/album_rows.html:1:{{define "album_rows"}}{{range .Albums}}{{template "album_row" .}}{{else}}<tr class="empty"><td colspan="7">No albums match your search.</td></tr>{{end}}{{end}}
+
+# Context of every dynamic value (html/template escapes each one for the context it lands in):
+#   .Title .Artists .Genre .Label .ReleaseYear .Available .Total  -> text inside <td>: < > & " ' become entities
+#   .User.Email .User.Role                                        -> text inside <span>
+#   .Query                                                        -> the value="..." attribute of the search input: quotes and tags escaped
+#   .ID                                                           -> id="album-N" and hx-delete="/web/albums/N": an int64 rendered as attribute text
+#   .Error                                                        -> text inside <p class="error">
+#   block "title"                                                 -> text inside <title>
+# No template.HTML, template.JS, template.URL or template.HTMLAttr anywhere: database text and user input stay text.
+
+# Live check against the running binary: an album whose title is HTML, and a search query that is a tag.
+$ curl -s -X POST localhost:8080/api/v1/albums -H 'Authorization: Bearer <admin token>' -H 'Content-Type: application/json' -d '{"title": "<script>alert(\"x\")</script> & \"quotes\"", "label": "Audit Label", "genre_id": 1, "artist_ids": [1]}'
+-> HTTP 201 (id 12)
+$ curl -s localhost:8080/catalog | grep -o '<td class="title">[^<]*</td>' | grep -i alert
+<td class="title">&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#34;quotes&#34;</td>
+$ curl -s 'localhost:8080/catalog?q=%3Cb%3Ex%3C/b%3E' | grep -o 'value="[^"]*"'
+value="&lt;b&gt;x&lt;/b&gt;"
+$ curl -s -H 'HX-Request: true' 'localhost:8080/web/albums?q=alert' | grep -c '<script>'   # the raw tag never reaches the browser
+0
+$ curl -s -o /dev/null -w '%{http_code}' -X DELETE localhost:8080/api/v1/albums/12 -H 'Authorization: Bearer <admin token>'   # clean up
+204
