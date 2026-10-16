@@ -10,7 +10,9 @@ import (
 
 // StaticFiles serves the embedded assets under /static/. It refuses directory listings
 // and answers the API's JSON 404 for anything that is not a file, so the only successful
-// responses are the assets themselves.
+// responses are the assets themselves. Embedded files carry no modification time, so
+// instead of validators the assets get a one-day Cache-Control: they only change with a
+// new binary.
 func StaticFiles(fsys fs.FS) http.Handler {
 	files := http.FileServer(http.FS(fsys))
 	return http.StripPrefix("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -23,6 +25,8 @@ func StaticFiles(fsys fs.FS) http.Handler {
 			handler.NotFound(w, r)
 			return
 		}
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		files.ServeHTTP(w, r)
 	}))
 }

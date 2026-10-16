@@ -178,6 +178,7 @@ type fixture struct {
 	albums   *fakeAlbums
 	copies   *fakeCopies
 	users    *fakeUsers
+	secure   bool // the COOKIE_SECURE switch passed to New
 	listOpts []repository.ListOptions
 	deleted  []int64
 }
@@ -221,7 +222,7 @@ func newFixture(t *testing.T) *fixture {
 // a fresh ServeMux gives the handlers their path values.
 func (fx *fixture) server() http.Handler {
 	fx.t.Helper()
-	h, err := New(repository.Repositories{Albums: fx.albums, Copies: fx.copies, Users: fx.users}, webfs.Templates(), testSecret, false)
+	h, err := New(repository.Repositories{Albums: fx.albums, Copies: fx.copies, Users: fx.users}, webfs.Templates(), testSecret, fx.secure)
 	if err != nil {
 		fx.t.Fatal(err)
 	}

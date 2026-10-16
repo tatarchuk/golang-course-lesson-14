@@ -82,6 +82,19 @@ func TestCatalogPage(t *testing.T) {
 			contains: []string{`href="/login"`},
 			lacks:    []string{"hx-delete", `action="/logout"`},
 		},
+		{
+			name:     "the empty state spans the six columns a visitor sees",
+			target:   "/catalog?q=zzz",
+			query:    "zzz",
+			contains: []string{`<tr class="empty"><td colspan="6">`},
+		},
+		{
+			name:     "the empty state spans the seven columns staff see",
+			target:   "/catalog?q=zzz",
+			cookie:   sessionFor(t, 2, model.UserRoleStaff),
+			query:    "zzz",
+			contains: []string{`<tr class="empty"><td colspan="7">`},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,8 +230,9 @@ func TestLoginAndLogout(t *testing.T) {
 	}
 	alice := model.User{ID: 7, Email: "alice@example.com", Role: model.UserRoleMember, PasswordHash: hash}
 	// newServer knows alice by e-mail, like the real repository would after a registration.
-	newServer := func(t *testing.T) http.Handler {
+	newServerSecure := func(t *testing.T, secure bool) http.Handler {
 		fx := newFixture(t)
+		fx.secure = secure
 		fx.users.getByEmail = func(email string) (model.User, error) {
 			if email == alice.Email {
 				return alice, nil
@@ -227,6 +241,7 @@ func TestLoginAndLogout(t *testing.T) {
 		}
 		return fx.server()
 	}
+	newServer := func(t *testing.T) http.Handler { return newServerSecure(t, false) }
 	credentials := func(email, password string) url.Values {
 		return url.Values{"email": {email}, "password": {password}}
 	}
@@ -249,6 +264,20 @@ func TestLoginAndLogout(t *testing.T) {
 		if err != nil || claims.UserID != alice.ID || claims.Role != alice.Role {
 			t.Errorf("the cookie must carry alice's token, got %+v (%v)", claims, err)
 		}
+	})
+	t.Run("COOKIE_SECURE marks the cookie Secure", func(t *testing.T) {
+		rec := do(newServerSecure(t, true), request(http.MethodPost, "/login", credentials("alice@example.com", "Correct-Horse-Battery-1"), nil, nil))
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d %s", rec.Code, rec.Body.String())
+		}
+		if c := setCookie(t, rec, CookieName); !c.Secure || !c.HttpOnly {
+			t.Errorf("expected a Secure, HttpOnly cookie, got %+v", c)
+		}
+	})
+	t.Run("an oversized form body is a 400 page, not a bcrypt run", func(t *testing.T) {
+		huge := credentials("alice@example.com", strings.Repeat("x", 20<<10))
+		body := htmlBody(t, do(newServer(t), request(http.MethodPost, "/login", huge, nil, nil)), http.StatusBadRequest)
+		contains(t, body, "the form could not be read", `<form method="post" action="/login"`)
 	})
 	t.Run("the e-mail is normalised before the lookup", func(t *testing.T) {
 		rec := do(newServer(t), request(http.MethodPost, "/login", credentials("  Alice@Example.COM ", "Correct-Horse-Battery-1"), nil, nil))

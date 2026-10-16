@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -35,6 +36,13 @@ func Open(cfg Config) (*gorm.DB, error) {
 	out := cfg.LogOutput
 	if out == nil {
 		out = os.Stdout
+	}
+	// GORM's Scan runs its statement through logger.Recorder, which ignores the
+	// ParameterizedQueries setting below and would inline the bound values; filtering the
+	// recorder's params keeps those statements value-free as well (the SQL keeps its $1,
+	// $2 placeholders). Lesson 10 review finding 1.
+	logger.RecorderParamsFilter = func(_ context.Context, sql string, _ ...interface{}) (string, []interface{}) {
+		return sql, nil
 	}
 	gormLogger := logger.New(log.New(out, "", log.LstdFlags), logger.Config{
 		SlowThreshold:             200 * time.Millisecond,

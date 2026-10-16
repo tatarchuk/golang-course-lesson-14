@@ -97,12 +97,13 @@ func NewRouter(repos repository.Repositories, cfg Config) http.Handler {
 	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handler.WriteError(w, http.StatusForbidden, handler.CodeForbidden, "cross-origin request refused")
 	}))
-	mux.Handle("GET /catalog", csrf.Handler(cookie(http.HandlerFunc(ui.Catalog))))
-	mux.Handle("GET /login", csrf.Handler(cookie(http.HandlerFunc(ui.LoginForm))))
-	mux.Handle("POST /login", csrf.Handler(http.HandlerFunc(ui.Login)))
-	mux.Handle("POST /logout", csrf.Handler(http.HandlerFunc(ui.Logout)))
-	mux.Handle("GET /web/albums", csrf.Handler(cookie(http.HandlerFunc(ui.Rows))))
-	mux.Handle("DELETE /web/albums/{id}", csrf.Handler(webStaff(ui.Delete)))
+	page := func(h http.Handler) http.Handler { return csrf.Handler(middleware.SecurityHeaders(h)) }
+	mux.Handle("GET /catalog", page(cookie(http.HandlerFunc(ui.Catalog))))
+	mux.Handle("GET /login", page(cookie(http.HandlerFunc(ui.LoginForm))))
+	mux.Handle("POST /login", page(http.HandlerFunc(ui.Login)))
+	mux.Handle("POST /logout", page(http.HandlerFunc(ui.Logout)))
+	mux.Handle("GET /web/albums", page(cookie(http.HandlerFunc(ui.Rows))))
+	mux.Handle("DELETE /web/albums/{id}", page(webStaff(ui.Delete)))
 	mux.Handle("GET /static/", webhandler.StaticFiles(cfg.Static))
 
 	mux.Handle("GET /swagger/", httpSwagger.WrapHandler) // Swagger UI: /swagger/index.html

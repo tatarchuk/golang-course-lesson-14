@@ -151,8 +151,8 @@ jobs:
           header "Theme 10: static checks"
           only_html_template() { ! grep -rn '"text/template"' --include=*.go .; }
           check "Only html/template is imported (no text/template anywhere)" only_html_template
-          no_template_html() { ! grep -rnE 'template\.HTML\b' --include=*.go cmd internal web; }
-          check "template.HTML is never used (contextual autoescaping stays intact)" no_template_html
+          no_template_html() { ! grep -rnE 'template\.(HTML|HTMLAttr|JS|JSStr|URL|CSS|Srcset)\b' --include=*.go cmd internal web; }
+          check "template.HTML and the other safe-content types are never used (autoescaping stays intact)" no_template_html
           embed_web() { grep -q '^//go:embed templates/' web/templates.go && grep -q '^//go:embed static' web/static.go && grep -q 'fs.Sub(staticFS, "static")' web/static.go; }
           check "web/templates.go and web/static.go embed the UI files (go:embed, fs.Sub)" embed_web
           parsefs_only() { grep -rq 'ParseFS' internal/handler/web && ! grep -rn 'ParseGlob' --include=*.go .; }
@@ -536,8 +536,12 @@ jobs:
               && grep -q 'src="/static/htmx.min.js"' page.html && grep -q 'Kind of Blue' page.html && ! grep -q 'hx-delete' page.html
           }
           check "GET /catalog renders the layout, the search form and the seed albums without delete buttons" catalog_anon
+          security_headers() { grep -qi "^content-security-policy: default-src 'self'" page.h && grep -qi '^x-frame-options: DENY' page.h && grep -qi '^x-content-type-options: nosniff' page.h; }
+          check "Pages carry Content-Security-Policy, X-Frame-Options and nosniff" security_headers
           static_css() { [ "$(page "$WEB/static/app.css")" = "200" ] && grep -qi '^content-type: text/css' page.h; }
           check "GET /static/app.css is served from the binary" static_css
+          static_cache() { grep -qi '^cache-control: public, max-age=' page.h && grep -qi '^x-content-type-options: nosniff' page.h; }
+          check "Static assets are cacheable and nosniff" static_cache
           static_js() { [ "$(page "$WEB/static/htmx.min.js")" = "200" ] && grep -qi '^content-type: text/javascript' page.h && grep -q 'version:"2.0.11"' page.html; }
           check "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)" static_js
           static_404() { [ "$(page "$WEB/static/")" = "404" ] && [ "$(page "$WEB/static/missing.css")" = "404" ]; }

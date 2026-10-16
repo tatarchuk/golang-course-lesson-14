@@ -352,6 +352,9 @@ func TestWebStaticAssets(t *testing.T) {
 		if r.Code != http.StatusOK || !strings.Contains(r.Header.Get("Content-Type"), tc.contentType) || len(r.Body) == 0 {
 			t.Errorf("%s: expected 200 %s with a body, got %d %q (%d bytes)", tc.path, tc.contentType, r.Code, r.Header.Get("Content-Type"), len(r.Body))
 		}
+		if !strings.Contains(r.Header.Get("Cache-Control"), "max-age=") || r.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: embedded assets must be cacheable and nosniff, got %v", tc.path, r.Header)
+		}
 	}
 	if r := call(h, "GET", "/static/missing.css", ""); r.Code != http.StatusNotFound {
 		t.Errorf("missing asset: expected 404, got %s", r)
@@ -359,4 +362,24 @@ func TestWebStaticAssets(t *testing.T) {
 	if r := call(h, "GET", "/static/", ""); r.Code == http.StatusOK {
 		t.Errorf("a directory listing must not be served, got %s", r)
 	}
+}
+
+// TestWebSecurityHeadersAndRootFallback pins the browser-side protections of the pages
+// (review finding 5) and that the root stays the API's JSON 404: /catalog is the entry page.
+func TestWebSecurityHeadersAndRootFallback(t *testing.T) {
+	h := newRouter(t)
+	for _, path := range []string{"/catalog", "/login"} {
+		r := call(h, "GET", path, "")
+		csp := r.Header.Get("Content-Security-Policy")
+		if r.Code != http.StatusOK || !strings.Contains(csp, "default-src 'self'") || !strings.Contains(csp, "frame-ancestors 'none'") {
+			t.Errorf("%s: expected a same-origin Content-Security-Policy, got %d %q", path, r.Code, csp)
+		}
+		if r.Header.Get("X-Content-Type-Options") != "nosniff" || r.Header.Get("X-Frame-Options") != "DENY" || r.Header.Get("Referrer-Policy") == "" {
+			t.Errorf("%s: missing security headers: %v", path, r.Header)
+		}
+	}
+	if r := call(h, "GET", "/api/v1/albums", ""); r.Header.Get("Content-Security-Policy") != "" {
+		t.Error("the API is JSON only and needs no Content-Security-Policy")
+	}
+	expect(t, call(h, "GET", "/", ""), http.StatusNotFound, "not_found")
 }

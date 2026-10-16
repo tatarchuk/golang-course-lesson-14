@@ -39,4 +39,18 @@ func TestOpenLogsSQLWithoutValues(t *testing.T) {
 			t.Errorf("the log must not contain %q:\n%s", secret, log)
 		}
 	}
+
+	// Lesson 10 review finding 1: GORM's Scan logs through logger.Recorder, which ignores
+	// ParameterizedQueries, so the availability query (a Scan) must be checked separately.
+	buf.Reset()
+	if _, err := repository.NewGorm(db).Copies.AvailabilityForAlbums(context.Background(), []int64{424242, 434343}); err != nil {
+		t.Fatal(err)
+	}
+	log = buf.String()
+	if !strings.Contains(log, "GROUP BY") {
+		t.Fatalf("expected the availability statement in the log, got:\n%s", log)
+	}
+	if strings.Contains(log, "424242") || strings.Contains(log, "'available'") {
+		t.Errorf("a Scan statement must be logged without its bound values:\n%s", log)
+	}
 }

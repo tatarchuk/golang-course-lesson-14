@@ -8,6 +8,10 @@ import (
 	"homework/internal/handler"
 )
 
+// maxFormBytes bounds the login form body: two short fields need far less, and the
+// limit keeps an oversized body from reaching bcrypt (the API caps bodies at 1 MiB).
+const maxFormBytes = 16 << 10
+
 // LoginForm handles GET /login.
 func (h *Handler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	who, err := h.visitor(r)
@@ -23,6 +27,7 @@ func (h *Handler) LoginForm(w http.ResponseWriter, r *http.Request) {
 // same 401 page, byte for byte: the form never echoes the e-mail back. Success stores
 // the token in the session cookie and sends the browser to the catalogue.
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
 	if err := r.ParseForm(); err != nil {
 		h.views.renderPage(w, http.StatusBadRequest, pageLogin, pageData{Title: "Log in", Error: "the form could not be read"})
 		return

@@ -196,8 +196,12 @@ page() { curl -s -o "$PAGE" -D "$HDR" -w '%{http_code}' "$@"; } # status to stdo
   && grep -q 'src="/static/htmx.min.js"' "$PAGE" && ! grep -q 'hx-delete' "$PAGE" \
   && pass "GET /catalog renders the layout and the search form without delete buttons for a visitor" \
   || fail "GET /catalog renders the layout and the search form without delete buttons for a visitor"
+grep -qi "^content-security-policy: default-src 'self'" "$HDR" && grep -qi '^x-frame-options: DENY' "$HDR" && grep -qi '^x-content-type-options: nosniff' "$HDR" \
+  && pass "Pages carry Content-Security-Policy, X-Frame-Options and nosniff" || fail "Pages carry Content-Security-Policy, X-Frame-Options and nosniff"
 [ "$(page "$BASE_URL/static/app.css")" = "200" ] && grep -qi '^content-type: text/css' "$HDR" \
   && pass "GET /static/app.css is served from the binary" || fail "GET /static/app.css is served from the binary"
+grep -qi '^cache-control: public, max-age=' "$HDR" && grep -qi '^x-content-type-options: nosniff' "$HDR" \
+  && pass "Static assets are cacheable and nosniff" || fail "Static assets are cacheable and nosniff"
 [ "$(page "$BASE_URL/static/htmx.min.js")" = "200" ] && grep -qi '^content-type: text/javascript' "$HDR" && grep -q 'version:"2.0.11"' "$PAGE" \
   && pass "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)" || fail "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)"
 [ "$(page "$BASE_URL/static/")" = "404" ] && [ "$(page "$BASE_URL/static/missing.css")" = "404" ] \
