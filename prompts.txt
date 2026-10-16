@@ -351,3 +351,17 @@ Cases (one test function per group, cases in a slice of structs, run with t.Run 
 The static files are covered by internal/app/web_test.go and need no test here. Error responses of the
 delete route are checked as the JSON envelope `{"error":{"code":...}}` with `Content-Type:
 application/json`. Keep the tests ASCII only; test names are behaviour sentences.
+
+--- Result / manual edits (3.2) ---
+Generated as specified: internal/handler/web/fakes_test.go (fakeAlbums, fakeCopies and fakeUsers as structs
+of function fields, each with a compile-time interface check; a fixture that records the ListOptions and
+the deleted ids; server() registering the routes exactly like app.go with CookieAuth, RequireRole and
+CrossOriginProtection; request, do, htmlBody, expectError and setCookie helpers) and catalog_test.go with
+the four table-driven groups: TestCatalogPage (7 cases, including the admin, the member and the cookie of a
+deleted account), TestRowsFragment (6 cases, including the empty query and the two redirects),
+TestDeleteRow (8 cases, including the cross-site refusal and the ids that reached the repository) and
+TestLoginAndLogout (6 cases: the form, the cookie attributes and the claims inside the token, e-mail
+normalisation, the two indistinguishable failures, a malformed form body, logout). One manual edit: the
+malformed-form case first built its request twice; the final version sets the body once. Every case
+passed on the first run (go test ./internal/handler/web/ -race -v), and the full suite is green:
+docs/web/tests-after.txt records 125 top-level tests and 164 subtests under -race.

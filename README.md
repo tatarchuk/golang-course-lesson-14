@@ -94,7 +94,7 @@ go test ./internal/app/ -run Web -v           # приймальні тести 
 go test ./internal/app/ -run 'Auth|RBAC' -v   # приймальні тести Теми 9
 make test                                     # go test ./... -race -count=1 з TEST_DATABASE_URL із .env
 go test ./internal/model ./internal/handler ./internal/middleware ./internal/auth   # без бази даних
-# TODO (крок 5): go test ./internal/handler/web   # тести вебобробників на фейках, без бази
+go test ./internal/handler/web                # тести вебобробників на фейках (27 підтестів), без бази
 gofmt -l . && go vet ./...
 scripts/smoke.sh http://localhost:8080        # повтор API smoke-тесту CI проти запущеного стека (після bootstrap)
 ```
@@ -122,7 +122,12 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
   реєстрація, логін (однакове тіло `401` для всіх невдач, одне bcrypt-порівняння завжди), `GET /me`,
   список акаунтів і зміна ролі; Тема 10: `Authenticate` (нормалізація e-mail, та сама помилка для невідомого
   e-mail, хибного пароля й акаунта без пароля; помилка сховища не маскується).
-  <!-- TODO (крок 5): + internal/handler/web: сторінка каталогу, фрагмент рядків, матриця доступу на видаленні, логін/логаут з cookie. -->
+- `internal/handler/web` (`catalog_test.go`, фейки у `fakes_test.go`, маршрутизація як в `app.go`): сторінка
+  каталогу для анонімного, `member`, `staff`, `admin` і видаленого акаунта (екранування назви, `?q=` доходить
+  до репозиторію як `Query` і повертається у поле), фрагмент рядків (лише `<tr>`, порожній рядок, кнопка для
+  `staff`, `303` без `HX-Request`), матриця на `DELETE /web/albums/{id}` (`401`/`403`/`200`/`404`/`400`,
+  Bearer-заголовок ігнорується, крос-сайт `403`, перевіряється, що саме дійшло до репозиторію), логін і логаут
+  (атрибути cookie й claims токена, однакові тіла двох невдач без `Set-Cookie`, `400` для нечитабельної форми).
 - `internal/middleware`: паніка → 500, CORS (з `Authorization`), логування, `Auth` (сім видів хибних
   облікових даних → `401`), `RequireRole` (`401`/`403`).
   Тема 10: `CookieAuth` (валідна cookie кладе claims у контекст; відсутня, прострочена, з іншим секретом
@@ -454,7 +459,7 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 |---|---|---|
 | 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | <!-- TODO --> у роботі |
 | 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | готово: промпти складено до генерації (крок 1), виконано у кроках 3 і 4 |
-| 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 <!-- TODO --> |
+| 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 тести на фейках готово (крок 5) |
 
 ### Частина 1. Архітектура вебшару та аудит автоекранування
 
@@ -565,4 +570,26 @@ FAIL	homework/internal/app	1.568s
 | `TestWebLoginAndLogout` | форма входу; успішний вхід → `303` і cookie з `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=86400`, без `Secure`; cookie показує e-mail і роль у шапці; невідомий e-mail і хибний пароль → побайтово однакові `401` без `Set-Cookie`; логаут прострочує cookie |
 | `TestWebStaticAssets` | `app.css` і `htmx.min.js` з правильними типами, `404` для невідомого файлу, лістинг `/static/` не віддається |
 
-<!-- TODO (крок 5): catalog_test.go на фейках і зелений прогін go test ./... -race (docs/web/tests-after.txt). -->
+Після реалізації (кроки 2–4) приймальні тести позеленіли, а завдання 3.2 додало табличні тести обробників на
+фейках у `internal/handler/web/catalog_test.go` (`TestCatalogPage`, `TestRowsFragment`, `TestDeleteRow`,
+`TestLoginAndLogout`; 27 підтестів без бази, маршрутизація як в `app.go`, тож `PathValue`, `CookieAuth`,
+`RequireRole` і `CrossOriginProtection` працюють як у продакшені). Повний прогін
+([docs/web/tests-after.txt](docs/web/tests-after.txt)):
+
+```text
+$ go test ./... -race -count=1
+ok  	homework/cmd/api	1.461s
+ok  	homework/cmd/bootstrap	4.918s
+?   	homework/docs	[no test files]
+ok  	homework/internal/app	23.658s
+ok  	homework/internal/auth	4.478s
+ok  	homework/internal/handler	10.492s
+ok  	homework/internal/handler/web	4.508s
+ok  	homework/internal/middleware	1.341s
+ok  	homework/internal/model	1.302s
+ok  	homework/internal/repository	2.327s
+?   	homework/internal/testdb	[no test files]
+?   	homework/migrations	[no test files]
+ok  	homework/web	1.316s
+# top-level tests passed: 125
+```
