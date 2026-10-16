@@ -1,0 +1,158 @@
+2026/10/16 13:04:08 migrations: schema version 3 (dirty=false)
+=== RUN   TestWebCatalogPage
+2026/10/16 13:04:08 POST /api/v1/genres -> 201 (2.631333ms)
+2026/10/16 13:04:08 POST /api/v1/artists -> 201 (1.424666ms)
+2026/10/16 13:04:08 POST /api/v1/artists -> 201 (913.375µs)
+2026/10/16 13:04:08 POST /api/v1/albums -> 201 (7.680542ms)
+2026/10/16 13:04:08 POST /api/v1/albums -> 201 (3.537583ms)
+2026/10/16 13:04:08 POST /api/v1/albums -> 201 (2.949083ms)
+2026/10/16 13:04:08 POST /api/v1/albums/2/copies -> 201 (1.87ms)
+2026/10/16 13:04:08 POST /api/v1/albums/2/copies -> 201 (1.125667ms)
+2026/10/16 13:04:08 POST /api/v1/albums/2/copies -> 201 (1.10625ms)
+2026/10/16 13:04:08 POST /api/v1/auth/register -> 201 (78.591708ms)
+2026/10/16 13:04:08 POST /api/v1/auth/register -> 201 (64.741542ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (63.604833ms)
+=== RUN   TestWebCatalogPage/renders_the_layout,_the_search_form_and_every_album_for_an_anonymous_visitor
+2026/10/16 13:04:09 GET /catalog -> 404 (121.125µs)
+    web_test.go:152: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebCatalogPage/escapes_HTML_in_album_titles
+2026/10/16 13:04:09 GET /catalog -> 404 (30.584µs)
+    web_test.go:162: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebCatalogPage/filters_server-side_with_?q=_and_echoes_the_query
+2026/10/16 13:04:09 GET /catalog -> 404 (4.208µs)
+    web_test.go:167: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebCatalogPage/shows_delete_buttons_to_staff_and_admin_only
+2026/10/16 13:04:09 GET /catalog -> 404 (5.083µs)
+    web_test.go:174: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestWebCatalogPage (0.25s)
+    --- FAIL: TestWebCatalogPage/renders_the_layout,_the_search_form_and_every_album_for_an_anonymous_visitor (0.00s)
+    --- FAIL: TestWebCatalogPage/escapes_HTML_in_album_titles (0.00s)
+    --- FAIL: TestWebCatalogPage/filters_server-side_with_?q=_and_echoes_the_query (0.00s)
+    --- FAIL: TestWebCatalogPage/shows_delete_buttons_to_staff_and_admin_only (0.00s)
+=== RUN   TestWebAlbumRowsFragment
+2026/10/16 13:04:09 POST /api/v1/genres -> 201 (1.260375ms)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (1.174041ms)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (897.334µs)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.467959ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.481542ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.068084ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.475375ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.535667ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.043791ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (63.928959ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (63.691959ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (64.551791ms)
+=== RUN   TestWebAlbumRowsFragment/matches_the_title_case-insensitively
+2026/10/16 13:04:09 GET /web/albums -> 404 (6.666µs)
+    web_test.go:200: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebAlbumRowsFragment/matches_an_artist_name
+2026/10/16 13:04:09 GET /web/albums -> 404 (11µs)
+    web_test.go:205: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebAlbumRowsFragment/escapes_HTML_in_a_fragment_too
+2026/10/16 13:04:09 GET /web/albums -> 404 (4.709µs)
+    web_test.go:210: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebAlbumRowsFragment/renders_one_empty-state_row_when_nothing_matches
+2026/10/16 13:04:09 GET /web/albums -> 404 (4.667µs)
+    web_test.go:215: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebAlbumRowsFragment/includes_the_delete_button_for_staff_only
+2026/10/16 13:04:09 GET /web/albums -> 404 (4.083µs)
+    web_test.go:222: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebAlbumRowsFragment/redirects_a_plain_browser_request_to_the_catalogue_page
+2026/10/16 13:04:09 GET /web/albums -> 404 (7µs)
+    web_test.go:229: expected 303 to /catalog?q=blue, got 404 ""
+--- FAIL: TestWebAlbumRowsFragment (0.23s)
+    --- FAIL: TestWebAlbumRowsFragment/matches_the_title_case-insensitively (0.00s)
+    --- FAIL: TestWebAlbumRowsFragment/matches_an_artist_name (0.00s)
+    --- FAIL: TestWebAlbumRowsFragment/escapes_HTML_in_a_fragment_too (0.00s)
+    --- FAIL: TestWebAlbumRowsFragment/renders_one_empty-state_row_when_nothing_matches (0.00s)
+    --- FAIL: TestWebAlbumRowsFragment/includes_the_delete_button_for_staff_only (0.00s)
+    --- FAIL: TestWebAlbumRowsFragment/redirects_a_plain_browser_request_to_the_catalogue_page (0.00s)
+=== RUN   TestWebDeleteRow
+2026/10/16 13:04:09 POST /api/v1/genres -> 201 (1.348208ms)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (1.031125ms)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (1.815875ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.06325ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (2.659625ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (2.71325ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.780958ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.643208ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.147958ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (62.422958ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (62.817584ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (62.91ms)
+=== RUN   TestWebDeleteRow/anonymous_gets_401
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (25.917µs)
+    web_test.go:242: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/member_gets_403
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (6.416µs)
+    web_test.go:245: expected 403, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/a_bearer_header_is_not_a_web_session
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (35.416µs)
+    web_test.go:248: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/an_expired_cookie_gets_401
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (5.583µs)
+    web_test.go:252: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/a_cross-site_request_is_refused_even_with_a_valid_cookie
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (7.083µs)
+    web_test.go:257: expected 403, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/staff_deletes_with_an_empty_200_and_the_album_and_its_copies_are_gone
+2026/10/16 13:04:09 DELETE /web/albums/1 -> 404 (5.625µs)
+    web_test.go:266: expected an empty 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/admin_deletes_too
+2026/10/16 13:04:09 DELETE /web/albums/2 -> 404 (4.208µs)
+    web_test.go:275: expected an empty 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebDeleteRow/unknown_and_malformed_ids
+2026/10/16 13:04:09 DELETE /web/albums/999999 -> 404 (15.5µs)
+2026/10/16 13:04:09 DELETE /web/albums/abc -> 404 (1.667µs)
+    web_test.go:280: expected 400, got 404 {"error":{"code":"not_found","message":"route not found"}}
+--- FAIL: TestWebDeleteRow (0.23s)
+    --- FAIL: TestWebDeleteRow/anonymous_gets_401 (0.00s)
+    --- FAIL: TestWebDeleteRow/member_gets_403 (0.00s)
+    --- FAIL: TestWebDeleteRow/a_bearer_header_is_not_a_web_session (0.00s)
+    --- FAIL: TestWebDeleteRow/an_expired_cookie_gets_401 (0.00s)
+    --- FAIL: TestWebDeleteRow/a_cross-site_request_is_refused_even_with_a_valid_cookie (0.00s)
+    --- FAIL: TestWebDeleteRow/staff_deletes_with_an_empty_200_and_the_album_and_its_copies_are_gone (0.00s)
+    --- FAIL: TestWebDeleteRow/admin_deletes_too (0.00s)
+    --- FAIL: TestWebDeleteRow/unknown_and_malformed_ids (0.00s)
+=== RUN   TestWebLoginAndLogout
+2026/10/16 13:04:09 POST /api/v1/genres -> 201 (1.491291ms)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (938.708µs)
+2026/10/16 13:04:09 POST /api/v1/artists -> 201 (2.010041ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.170375ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (2.522167ms)
+2026/10/16 13:04:09 POST /api/v1/albums -> 201 (3.579125ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.457708ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.029708ms)
+2026/10/16 13:04:09 POST /api/v1/albums/1/copies -> 201 (1.068584ms)
+2026/10/16 13:04:09 POST /api/v1/auth/register -> 201 (62.119ms)
+=== RUN   TestWebLoginAndLogout/the_login_page_is_a_form_posting_e-mail_and_password
+2026/10/16 13:04:09 GET /login -> 404 (12.458µs)
+    web_test.go:291: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebLoginAndLogout/a_valid_login_sets_an_HttpOnly_SameSite_cookie_and_redirects_to_the_catalogue
+2026/10/16 13:04:09 POST /login -> 404 (5.958µs)
+    web_test.go:297: expected 303 to /catalog, got 404 "" {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebLoginAndLogout/the_cookie_identifies_the_account_on_the_catalogue_page
+    web_test.go:310: no session cookie from the login subtest
+=== RUN   TestWebLoginAndLogout/an_unknown_e-mail_and_a_wrong_password_are_indistinguishable
+2026/10/16 13:04:09 POST /login -> 404 (6.959µs)
+2026/10/16 13:04:09 POST /login -> 404 (1.417µs)
+    web_test.go:320: expected 401, got 404 {"error":{"code":"not_found","message":"route not found"}}
+=== RUN   TestWebLoginAndLogout/logout_expires_the_cookie_and_redirects
+    web_test.go:331: no session cookie from the login subtest
+--- FAIL: TestWebLoginAndLogout (0.10s)
+    --- FAIL: TestWebLoginAndLogout/the_login_page_is_a_form_posting_e-mail_and_password (0.00s)
+    --- FAIL: TestWebLoginAndLogout/a_valid_login_sets_an_HttpOnly_SameSite_cookie_and_redirects_to_the_catalogue (0.00s)
+    --- FAIL: TestWebLoginAndLogout/the_cookie_identifies_the_account_on_the_catalogue_page (0.00s)
+    --- FAIL: TestWebLoginAndLogout/an_unknown_e-mail_and_a_wrong_password_are_indistinguishable (0.00s)
+    --- FAIL: TestWebLoginAndLogout/logout_expires_the_cookie_and_redirects (0.00s)
+=== RUN   TestWebStaticAssets
+2026/10/16 13:04:09 GET /static/app.css -> 404 (6.875µs)
+    web_test.go:353: /static/app.css: expected 200 text/css with a body, got 404 "application/json" (59 bytes)
+2026/10/16 13:04:09 GET /static/htmx.min.js -> 404 (2.042µs)
+    web_test.go:353: /static/htmx.min.js: expected 200 javascript with a body, got 404 "application/json" (59 bytes)
+2026/10/16 13:04:09 GET /static/missing.css -> 404 (1.75µs)
+2026/10/16 13:04:09 GET /static/ -> 404 (1.459µs)
+--- FAIL: TestWebStaticAssets (0.01s)
+FAIL
+FAIL	homework/internal/app	1.568s
+FAIL
