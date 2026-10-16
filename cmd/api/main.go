@@ -14,6 +14,8 @@ import (
 
 	"homework/internal/app"
 	"homework/internal/repository"
+	"homework/migrations"
+	"homework/web"
 )
 
 // @title        Albums API
@@ -42,8 +44,9 @@ func run() error {
 	if err := validateSecret(secret); err != nil {
 		return err
 	}
-	migrations := envOr("MIGRATIONS_PATH", "migrations")
+	migrationsDir := os.Getenv("MIGRATIONS_PATH") // empty: the embedded set
 	port := envOr("PORT", "8080")
+	cookieSecure := envBool("COOKIE_SECURE")
 
 	db, err := repository.Open(repository.Config{DSN: dsn, LogLevel: os.Getenv("DB_LOG_LEVEL")})
 	if err != nil {
@@ -55,13 +58,16 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	if err := repository.Migrate(dsn, migrations); err != nil {
+	if err := applyMigrations(dsn, migrationsDir); err != nil {
 		return err
 	}
 
+	// The web UI's templates, static files and the migrations travel inside the binary:
+	// nothing is read from disk, so the server runs from any directory (Lesson 10).
+	cfg := app.Config{JWTSecret: secret, Templates: web.Templates(), Static: web.Static(), CookieSecure: cookieSecure}
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           app.NewRouter(repository.NewGorm(db), app.Config{JWTSecret: secret}),
+		Handler:           app.NewRouter(repository.NewGorm(db), cfg),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -109,9 +115,28 @@ func validateSecret(secret string) error {
 	return nil
 }
 
+// applyMigrations runs the migrations embedded in the binary or, when dir is not empty
+// (MIGRATIONS_PATH), the SQL files of that directory: a development override, the binary
+// itself needs no files on disk.
+func applyMigrations(dsn, dir string) error {
+	if dir != "" {
+		log.Printf("migrations: applying the SQL files of %s", dir)
+		return repository.Migrate(dsn, dir)
+	}
+	log.Print("migrations: applying the embedded set")
+	return repository.MigrateFS(dsn, migrations.FS)
+}
+
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return def
+}
+
+// envBool reads an on/off switch: "true" and "1" (any case) switch it on, anything else
+// including an unset variable leaves it off.
+func envBool(key string) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	return v == "true" || v == "1"
 }

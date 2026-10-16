@@ -15,16 +15,18 @@ import (
 	"homework/internal/model"
 	"homework/internal/repository"
 	"homework/internal/testdb"
+	"homework/web"
 )
 
 // newRouter resets the database and builds the full HTTP handler on top of it. The
 // secret is set through the environment, as the Lesson 9 tests do, and read back the
-// way main does.
+// way main does; the web UI gets the same embedded files main passes (Lesson 10).
 func newRouter(t *testing.T) http.Handler {
 	t.Helper()
 	t.Setenv("JWT_SECRET", testJWTSecret)
 	testdb.Reset(t)
-	return app.NewRouter(repository.NewGorm(testdb.DB(t)), app.Config{JWTSecret: os.Getenv("JWT_SECRET")})
+	cfg := app.Config{JWTSecret: os.Getenv("JWT_SECRET"), Templates: web.Templates(), Static: web.Static()}
+	return app.NewRouter(repository.NewGorm(testdb.DB(t)), cfg)
 }
 
 // staffCall serves one request with a staff token minted with the shared secret: since

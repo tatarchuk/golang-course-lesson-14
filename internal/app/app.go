@@ -2,6 +2,7 @@
 package app
 
 import (
+	"io/fs"
 	"net/http"
 
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -15,7 +16,10 @@ import (
 
 // Config carries the settings the router needs beyond the repositories.
 type Config struct {
-	JWTSecret string // signs and verifies login tokens; main refuses to start without it
+	JWTSecret    string // signs and verifies login tokens; main refuses to start without it
+	Templates    fs.FS  // html/template files of the web UI, embedded by package web
+	Static       fs.FS  // static assets served under /static/, embedded by package web
+	CookieSecure bool   // Secure flag of the web session cookie; switch it on behind TLS
 }
 
 // NewRouter builds the complete HTTP handler on top of the given repositories. Handlers
@@ -26,6 +30,9 @@ type Config struct {
 func NewRouter(repos repository.Repositories, cfg Config) http.Handler {
 	if cfg.JWTSecret == "" {
 		panic("app.NewRouter: JWTSecret is empty (set JWT_SECRET)")
+	}
+	if cfg.Templates == nil || cfg.Static == nil {
+		panic("app.NewRouter: Templates and Static are required (pass web.Templates() and web.Static())")
 	}
 	albums := handler.NewAlbumHandler(repos.Albums)
 	artists := handler.NewArtistHandler(repos.Artists)

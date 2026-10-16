@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 func TestRunCreatesAndResetsTheAdmin(t *testing.T) {
 	testdb.Reset(t)
 	t.Setenv("DATABASE_URL", testdb.DSN())
-	t.Setenv("MIGRATIONS_PATH", testdb.MigrationsDir())
+	t.Setenv("MIGRATIONS_PATH", "") // the embedded migrations are the default since Lesson 10
 	t.Setenv("ADMIN_PASSWORD", "")
 
 	if err := run(" Admin@Albums.LOCAL ", "Albums-Dev-2026"); err != nil {

@@ -1,0 +1,11 @@
+{{define "album_row"}}
+<tr id="album-{{.ID}}">
+  <td class="title">{{.Title}}</td>
+  <td>{{.Artists}}</td>
+  <td>{{.Genre}}</td>
+  <td class="year">{{with .ReleaseYear}}{{.}}{{end}}</td>
+  <td>{{.Label}}</td>
+  <td class="availability">{{.Available}}/{{.Total}}</td>
+  {{if .CanDelete}}<td class="actions"><button type="button" class="danger" hx-delete="/web/albums/{{.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this album?">Delete</button></td>{{end}}
+</tr>
+{{end}}

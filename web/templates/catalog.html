@@ -1,0 +1,26 @@
+{{define "title"}}Catalogue - Albums{{end}}
+{{define "content"}}
+<h1>Catalogue</h1>
+<form method="get" action="/catalog" class="search" role="search">
+  <input type="search" name="q" value="{{.Query}}" placeholder="Search by album or artist" autocomplete="off"
+         hx-get="/web/albums" hx-trigger="keyup changed delay:300ms" hx-target="#album-list" hx-swap="innerHTML">
+  <button type="submit">Search</button>
+</form>
+<table class="albums">
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Artists</th>
+      <th>Genre</th>
+      <th>Year</th>
+      <th>Label</th>
+      <th class="availability">Copies</th>
+      {{if .CanDelete}}<th class="actions"></th>{{end}}
+    </tr>
+  </thead>
+  <tbody id="album-list">
+    {{template "album_rows" .}}
+  </tbody>
+</table>
+<p class="hint">Copies shows available/total.</p>
+{{end}}

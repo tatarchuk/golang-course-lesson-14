@@ -1,0 +1,4 @@
+# htmx.org 2.0.11, the official minified build, downloaded verbatim on 2026-10-16 from
+# https://unpkg.com/htmx.org@2.0.11/dist/htmx.min.js (npm dist-tag latest at that date).
+# Verify: shasum -a 256 -c docs/web/htmx.sha256   (from the repository root)
+d6fdc75f204e6bdefa99b69bf1e6d4ac69b8a364f77929f45c13476b4000f717  web/static/htmx.min.js

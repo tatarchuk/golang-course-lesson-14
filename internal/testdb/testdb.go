@@ -12,14 +12,13 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
 	"gorm.io/gorm"
 
 	"homework/internal/repository"
+	"homework/migrations"
 )
 
 // lockID is an arbitrary application-level key for pg_advisory_lock.
@@ -64,7 +63,7 @@ func Run(m *testing.M) int {
 		fmt.Fprintf(os.Stderr, "testdb: lock: %v\n", err)
 		return 1
 	}
-	if err := repository.Migrate(dsn, MigrationsDir()); err != nil {
+	if err := repository.MigrateFS(dsn, migrations.FS); err != nil {
 		fmt.Fprintf(os.Stderr, "testdb: migrate: %v\n", err)
 		return 1
 	}
@@ -104,11 +103,4 @@ func Reset(t testing.TB) {
 	if err != nil {
 		t.Fatalf("testdb: reset: %v", err)
 	}
-}
-
-// MigrationsDir is the repository's migrations directory, resolved relative to this
-// file so tests work from any package directory.
-func MigrationsDir() string {
-	_, file, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(file), "..", "..", "migrations")
 }

@@ -17,9 +17,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/api ./c
 FROM alpine:3.21
 RUN adduser -D -H app
 WORKDIR /app
+# No migrations directory and no web/ directory: both binaries embed the SQL files,
+# the templates and the static assets (Lesson 10).
 COPY --from=build /out/api /out/bootstrap /app/
-COPY migrations /app/migrations
 USER app
-ENV PORT=8080 MIGRATIONS_PATH=/app/migrations
+ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT ["/app/api"]

@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"strings"
@@ -12,15 +13,16 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-// Migrate applies every pending migration from dir to the database at dsn, using
-// golang-migrate as a library. It is idempotent: an up-to-date database is left as it
-// is. The application runs it at startup, so a fresh database receives the schema
-// and the demo data before the first request. The migrator opens its own
-// connection and closes it on return; it never touches GORM's pool.
-func Migrate(dsn, dir string) error {
-	src, err := iofs.New(os.DirFS(dir), ".")
+// MigrateFS applies every pending migration found in fsys to the database at dsn,
+// using golang-migrate as a library. It is idempotent: an up-to-date database is left
+// as it is. The application runs it at startup with the migrations embedded in the
+// binary (package migrations), so a fresh database receives the schema and the demo
+// data before the first request. The migrator opens its own connection and closes it
+// on return; it never touches GORM's pool.
+func MigrateFS(dsn string, fsys fs.FS) error {
+	src, err := iofs.New(fsys, ".")
 	if err != nil {
-		return fmt.Errorf("migrations in %q: %w", dir, err)
+		return fmt.Errorf("migrations source: %w", err)
 	}
 	m, err := migrate.NewWithSourceInstance("iofs", src, pgxURL(dsn))
 	if err != nil {
@@ -37,6 +39,12 @@ func Migrate(dsn, dir string) error {
 	}
 	log.Printf("migrations: schema version %d (dirty=%t)", version, dirty)
 	return nil
+}
+
+// Migrate applies the SQL files of the directory dir on disk: the development override
+// behind MIGRATIONS_PATH. The default source is the embedded set, migrations.FS.
+func Migrate(dsn, dir string) error {
+	return MigrateFS(dsn, os.DirFS(dir))
 }
 
 // pgxURL rewrites a postgres:// URL to the pgx5:// scheme golang-migrate's pgx/v5

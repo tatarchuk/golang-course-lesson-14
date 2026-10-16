@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}Albums{{end}}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/catalog">Albums</a>
+    <div class="account">
+      {{if .User}}
+      <span class="user">{{.User.Email}} ({{.User.Role}})</span>
+      <form method="post" action="/logout" class="inline"><button type="submit">Log out</button></form>
+      {{else}}
+      <a href="/login">Log in</a>
+      {{end}}
+    </div>
+  </header>
+  <main class="container">
+    {{block "content" .}}{{end}}
+  </main>
+</body>
+</html>

@@ -17,6 +17,7 @@ import (
 	"homework/internal/auth"
 	"homework/internal/model"
 	"homework/internal/repository"
+	"homework/migrations"
 )
 
 func main() {
@@ -43,10 +44,7 @@ func run(email, password string) error {
 	if dsn == "" {
 		return errors.New("DATABASE_URL is required, e.g. postgres://albums:albums@localhost:5432/albums?sslmode=disable")
 	}
-	migrations := os.Getenv("MIGRATIONS_PATH")
-	if migrations == "" {
-		migrations = "migrations"
-	}
+	migrationsDir := os.Getenv("MIGRATIONS_PATH") // empty: the set embedded in the binary
 	db, err := repository.Open(repository.Config{DSN: dsn, LogLevel: "warn"})
 	if err != nil {
 		return err
@@ -56,7 +54,12 @@ func run(email, password string) error {
 		return err
 	}
 	defer sqlDB.Close()
-	if err := repository.Migrate(dsn, migrations); err != nil {
+	if migrationsDir != "" {
+		err = repository.Migrate(dsn, migrationsDir)
+	} else {
+		err = repository.MigrateFS(dsn, migrations.FS)
+	}
+	if err != nil {
 		return err
 	}
 	hash, err := auth.HashPassword(password)

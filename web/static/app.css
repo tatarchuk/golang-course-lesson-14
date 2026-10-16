@@ -1,0 +1,138 @@
+/* Albums web UI: a small, readable stylesheet. No external fonts, no imports. */
+:root {
+  --ink: #1f2933;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --zebra: #f9fafb;
+  --accent: #2563eb;
+  --danger: #b91c1c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  line-height: 1.45;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar .brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.topbar .account {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.topbar .user { color: var(--muted); }
+
+.container {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+
+a { color: var(--accent); }
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+button.danger:hover { background: #fef2f2; }
+
+form.inline { display: inline; }
+
+form.inline button {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+form.search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+form.search input {
+  flex: 1;
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+form.login {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 22rem;
+}
+
+form.login input {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+table.albums {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.albums th,
+table.albums td {
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.albums th { font-weight: 600; color: var(--muted); font-size: 0.9rem; }
+
+table.albums tbody tr:nth-child(even) { background: var(--zebra); }
+
+table.albums .availability { text-align: right; white-space: nowrap; }
+
+table.albums .actions { text-align: right; width: 1%; white-space: nowrap; }
+
+table.albums .empty td {
+  text-align: center;
+  color: var(--muted);
+  padding: 1.5rem;
+}
+
+tbody.htmx-request { opacity: 0.5; transition: opacity 150ms ease-in; }
+
+.hint { color: var(--muted); font-size: 0.9rem; }
+
+.error { color: var(--danger); }

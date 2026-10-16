@@ -70,18 +70,18 @@ docker compose down                                # зупинити; дані 
 
 ```sh
 docker compose up -d postgres        # або make db
-set -a; . ./.env; set +a             # DATABASE_URL, JWT_SECRET, PORT, ADMIN_*; TODO: + COOKIE_SECURE, MIGRATIONS_PATH необов'язковий
+set -a; . ./.env; set +a             # DATABASE_URL, JWT_SECRET, PORT, COOKIE_SECURE, ADMIN_* (MIGRATIONS_PATH - лише перевизначення)
 make bootstrap                       # go run ./cmd/bootstrap -email $ADMIN_EMAIL (пароль з ADMIN_PASSWORD)
 go run ./cmd/api                     # або make run
-# TODO (крок 3): make build -> bin/api, статично злінкований бінарник (CGO_ENABLED=0), що працює з порожньої теки
+make build                           # bin/api: статично злінкований бінарник (CGO_ENABLED=0) із вбудованими шаблонами, статикою й міграціями
 ```
 
 | Змінна | Призначення | Типово |
 |---|---|---|
 | `DATABASE_URL` | рядок підключення PostgreSQL, обов'язкова | — |
 | `JWT_SECRET` | секрет підпису JWT (HS256), обов'язкова: щонайменше 32 байти, заготовка `change-me…` з `.env.example` відхиляється (`openssl rand -base64 48`) | — |
-| `MIGRATIONS_PATH` | тека з міграціями golang-migrate <!-- TODO (крок 3): стає необов'язковим перевизначенням, типово — міграції, вбудовані в бінарник --> | `migrations` |
-| `COOKIE_SECURE` | <!-- TODO (крок 3): --> прапорець `Secure` на cookie сесії вебінтерфейсу; `true` за TLS-проксі | `false` |
+| `MIGRATIONS_PATH` | необов'язкове перевизначення: тека з SQL-файлами golang-migrate замість набору, вбудованого в бінарник (`migrations/embed.go`) | — (вбудовані міграції) |
+| `COOKIE_SECURE` | прапорець `Secure` на cookie сесії вебінтерфейсу (`albums_token`); `true` за TLS-проксі | `false` |
 | `PORT` | порт HTTP-сервера | `8080` |
 | `DB_LOG_LEVEL` | логер GORM: `info` (кожен запит), `warn`, `error`, `silent` | `info` |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | акаунт, який створює або скидає `make bootstrap` (лише для `cmd/bootstrap`) | `admin@albums.local`, — |
@@ -112,7 +112,8 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
 - `internal/repository`: інтеграційні тести з реальною БД: створення зі зв'язками, невідомі посилання
   (`invalid_reference`), дублікати (`conflict`), список із фільтром і пагінацією, повна заміна у `PUT`,
   каскад при видаленні, примірники та доступність, ідемпотентність міграцій, guard-тест
-  `TestListQueryCountIsConstant` на N+1, `UserRepository`, `TestMigrationAddsPasswordHashColumn`.
+  `TestListQueryCountIsConstant` на N+1, `UserRepository`, `TestMigrationAddsPasswordHashColumn`,
+  `TestMigrateFSAppliesTheEmbeddedSet` (вбудований набір: 3 пари up/down, повторний запуск — no-op, версія 3).
   Тема 10: пошук за назвою або виконавцем без урахування регістру (`ListOptions.Query`: `ILIKE`,
   екранування `%`, `_` і `\`, поєднання з фільтром за жанром і пагінацією, та сама кількість `SELECT`,
   що й без пошуку) і `AvailabilityForAlbums` одним запитом для цілої сторінки (альбоми без примірників
@@ -129,8 +130,12 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
   `TestWebCatalogPage`, `TestWebAlbumRowsFragment`, `TestWebDeleteRow`, `TestWebLoginAndLogout`,
   `TestWebStaticAssets`; таблиця в розділі [Частина 3](#частина-3-goembed-і-тести));
   `TestNewRouterPanicsWithoutSecret` фіксує fail fast без секрету.
+- `web`: шаблони розбираються з вбудованої файлової системи так само, як в обробниках (макет і партіали
+  один раз, клон на сторінку); сторінка каталогу рендерить рядки, наявність `2/3`, кнопки видалення лише
+  для `CanDelete` і екранує HTML у назві та лапки в `q`; партіал рядків — лише `<tr>`; сторінка входу не
+  повертає введений e-mail; статика містить `app.css` і `htmx.min.js`, а префікс `static/` знято.
 - `cmd/bootstrap`: команда створює адміністратора, повторний запуск скидає пароль того самого рядка;
-  без пароля або `DATABASE_URL` завершується помилкою.
+  без пароля або `DATABASE_URL` завершується помилкою; мігрує вбудованим набором, як і API.
 
 CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), «Theme 8 + Theme 9
 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
@@ -359,27 +364,27 @@ Dev-пароль `Albums-Dev-2026` задокументовано тут і в `
 ## Структура проєкту та прийняті рішення
 
 ```
-cmd/api/main.go                      конфігурація з env (JWT_SECRET читається один раз, порожній -> fail fast), міграції, HTTP-сервер, graceful shutdown
+cmd/api/main.go                      конфігурація з env (JWT_SECRET читається один раз, порожній -> fail fast), вбудовані міграції або MIGRATIONS_PATH, app.Config з Templates/Static/CookieSecure, HTTP-сервер, graceful shutdown
 cmd/bootstrap/main.go                створення або скидання адміністратора: bcrypt-хеш + upsert з роллю admin
 internal/app/app.go                  NewRouter(repos, cfg): маршрути за групами public / protected / staff / admin -> ServeMux -> Logging(Recover(CORS))
 internal/auth/                       bcrypt-хешування (DummyHash для невідомих акаунтів), видача та перевірка HS256 JWT, користувач у контексті запиту
 internal/model/                      GORM-моделі Album, Artist, Genre, Copy, User (PasswordHash json:"-"), AlbumArtist + вхідні структури з Validate()
-internal/repository/                 інтерфейси та GORM-реалізації, errors.go, db.go (Open), migrate.go (Migrate)
+internal/repository/                 інтерфейси та GORM-реалізації, errors.go, db.go (Open), migrate.go (MigrateFS для вбудованого набору, Migrate для теки)
 internal/handler/                    HTTP-обробники API (*_handler.go), errors.go (коди, відображення помилок), парсинг
 internal/middleware/                 Logging, Recover, CORS (+ Authorization), Auth, RequireRole
-internal/testdb/                     спільне підключення для тестів із БД (advisory lock, міграції, TRUNCATE)
-migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down)
+internal/testdb/                     спільне підключення для тестів із БД (advisory lock, вбудовані міграції, TRUNCATE)
+migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down) + embed.go: SQL-файли вбудовані в бінарник
+web/                                 вбудовані файли вебінтерфейсу (go:embed): templates.go, static.go, templates/ (layout, catalog, login, partials/album_row*), static/ (app.css, htmx.min.js 2.0.11)
 docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10)
 scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI з логіном), measure_n1.sh (N+1), render_er.sh
-Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) і стек postgres + api (JWT_SECRET обов'язковий)
-Makefile, .env.example               щоденні команди (+ bootstrap) та приклад конфігурації
+Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) без теки migrations/ і стек postgres + api (JWT_SECRET обов'язковий, COOKIE_SECURE)
+Makefile, .env.example               щоденні команди (+ bootstrap, build) та приклад конфігурації (COOKIE_SECURE; MIGRATIONS_PATH закоментовано)
 albums_lesson10_homework.md          умова Теми 10, адаптована під варіант albums
 prompts.txt                          промпти завдань 2.1, 2.2, 3.1, 3.2 з нотатками про результат
 .github/workflows/theme8-check.yml   CI: структура, міграції, тести, smoke-тест з аутентифікацією
 ```
 
-<!-- TODO (кроки 3-4): додати до переліку web/ (templates.go, static.go, templates/, static/), internal/handler/web/,
-     internal/middleware/cookie.go, internal/handler/authenticate.go, migrations/embed.go; оновити рядки cmd/api, Dockerfile. -->
+<!-- TODO (крок 4): додати до переліку internal/handler/web/, internal/middleware/cookie.go, internal/handler/authenticate.go. -->
 
 Рішення Теми 8, які лишаються в силі:
 
@@ -445,7 +450,7 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 |---|---|---|
 | 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | <!-- TODO --> у роботі |
 | 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | промпти складено (крок 1), виконання <!-- TODO --> |
-| 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | тести написано й червоні (крок 1), реалізація <!-- TODO --> |
+| 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 <!-- TODO --> |
 
 ### Частина 1. Архітектура вебшару та аудит автоекранування
 
@@ -492,7 +497,12 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/h
 `{{block "title" .}}` у `layout.html`, форму пошуку з трьома HTMX-атрибутами, що працює і без JavaScript,
 партіал `album_rows` з порожнім рядком, кнопку видалення лише для `.CanDelete`, заборону `template.HTML`
 і сторінку входу, яка не повертає введений e-mail (однакові тіла для двох видів невдалого входу).
-<!-- TODO (крок 2/4): аналіз результату. -->
+Результат: згенеровано всі п'ять шаблонів і `web/static/app.css` точно за промптом, без ручних правок;
+`web/static/htmx.min.js` не генерувався — це офіційна мініфікована збірка htmx.org 2.0.11 (npm-тег
+`latest` на 2026-10-16), завантажена дослівно; версію й sha256 зафіксовано в
+[docs/web/htmx.sha256](docs/web/htmx.sha256). До запуску промпту написано тести `web/web_test.go`, які
+розбирають вбудований набір так само, як це робитимуть обробники, і рендерять три сторінки (розділ
+[Тести та перевірки](#тести-та-перевірки)); вони зелені.
 
 **2.2. HTMX-інтерактивність, обробники, cookie-сесія.** Промпт описує `ListOptions.Query` з `ILIKE` і
 екрануванням, `AvailabilityForAlbums` одним запитом, винесення перевірки облікових даних у
@@ -502,8 +512,24 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/h
 
 ### Частина 3. go:embed і тести
 
-**3.1. `go:embed`.** <!-- TODO (крок 3): що згенеровано (web/templates.go, web/static.go, migrations/embed.go, MigrateFS,
-app.Config, Dockerfile/compose без migrations/), ручні правки, перевірка. -->
+**3.1. `go:embed`.** Згенеровано за промптом: `web/templates.go` (`//go:embed templates/*.html
+templates/partials/*.html`, `Templates()` через `fs.Sub`), `web/static.go` (`//go:embed static`, `Static()`
+через `fs.Sub(staticFS, "static")`), `web/doc.go`, `migrations/embed.go` (`//go:embed *.sql`,
+`migrations.FS`), `repository.MigrateFS(dsn, fsys)` з `Migrate(dsn, dir)` як обгорткою над `os.DirFS`,
+перемикач у `cmd/api/main.go` (`applyMigrations`: порожній `MIGRATIONS_PATH` означає вбудований набір, лог
+каже, яке джерело застосовано) і той самий перемикач у `cmd/bootstrap/main.go`, `app.Config{Templates,
+Static, CookieSecure}` із fail fast на `nil`, `COOKIE_SECURE` через `envBool`, ціль `make build`, `Dockerfile`
+без `COPY migrations` і `MIGRATIONS_PATH`, `docker-compose.yml` з `COOKIE_SECURE`, `.env.example` із
+закоментованим `MIGRATIONS_PATH`. Ручні правки: змінну `migrations` в обох `main` перейменовано на
+`migrationsDir`, бо вона затіняла імпортований пакет; `internal/testdb` мігрує з `migrations.FS` і втратив
+`MigrationsDir`. Тести адаптовано вручну: `newRouter` передає `web.Templates()` і `web.Static()`,
+`TestNewRouterPanicsWithoutTemplatesOrStatic`, `TestMigrateFSAppliesTheEmbeddedSet`, дисковий тест `Migrate`
+дивиться на `../../migrations`, тест bootstrap працює без `MIGRATIONS_PATH`. Перевірено: `go test ./...
+-race` (червоними лишаються лише приймальні тести Теми 10), `go mod tidy` без змін, `docker compose config
+-q`, `docker compose build api`, і запуск `bin/api`, скопійованого самого в порожню теку, без
+`MIGRATIONS_PATH` проти compose-бази: у лозі `migrations: applying the embedded set` і `schema version 3`
+(схему створено з нуля), `GET /health` → `200`, `GET /api/v1/albums` → `200`. Повний тест ізоляції з
+`/catalog` і статикою — у розділі [Тест ізоляції](#тест-ізоляції-єдиного-бінарника) після кроку 4.
 
 **3.2. Тести.** Приймальні тести `internal/app/web_test.go` написано до реалізації; до неї кожен маршрут
 відповідає JSON `404` (повний вивід: [docs/web/tests-before.txt](docs/web/tests-before.txt)):

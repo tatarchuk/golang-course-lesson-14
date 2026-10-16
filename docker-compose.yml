@@ -27,9 +27,9 @@ services:
     environment:
       # Inside the compose network the database host is the service name, not localhost.
       DATABASE_URL: postgres://${POSTGRES_USER:-albums}:${POSTGRES_PASSWORD:-albums}@postgres:5432/${POSTGRES_DB:-albums}?sslmode=disable
-      MIGRATIONS_PATH: /app/migrations
       PORT: "8080"
       DB_LOG_LEVEL: ${DB_LOG_LEVEL:-info}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false} # Secure flag of the web session cookie; true behind TLS
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (cp .env.example .env)}
     depends_on:
       postgres:

@@ -92,6 +92,21 @@ release, downloaded verbatim; its version and sha256 are recorded in docs/web/ht
 
 All files ASCII only. Output each file completely, no placeholders.
 
+--- Result / manual edits (2.1) ---
+Generated as specified: web/templates/layout.html (title and content blocks, the topbar with the user
+box and the logout form or the login link, stylesheet and htmx from /static/), catalog.html (search form
+with the three htmx attributes and a plain GET fallback, the albums table with the actions column only
+for CanDelete, tbody#album-list rendering album_rows), partials/album_rows.html (the rows or one empty
+row), partials/album_row.html (tr#album-{id}, the availability cell, the delete button for CanDelete
+only), login.html (never echoes the e-mail) and web/static/app.css. htmx was not generated:
+web/static/htmx.min.js is the official minified htmx.org 2.0.11 build (npm dist-tag latest on
+2026-10-16), downloaded verbatim from unpkg; version and sha256 are in docs/web/htmx.sha256. No manual
+edits in the generated files. Written by hand, test-first, before the prompt ran: web/web_test.go parses
+the embedded set the way the handlers will (layout + partials once, one clone per page) and renders the
+catalogue page, the rows partial and the login page: blocks defined, rows and availability present, HTML
+in a title and quotes in the query escaped, the rows partial is <tr> elements only, the login page has no
+value attributes. Verified with go test ./web/.
+
 === Prompt 3.1: go:embed for templates, static assets and migrations; single-binary wiring ===
 
 Continue in the same repository ("Albums API", Go module `homework`, Go 1.25). Conventions: every type
@@ -143,6 +158,25 @@ Generate:
 
 Do not touch the handlers or the tests (the test helpers are adapted by hand). Output each new or changed
 file completely, no placeholders.
+
+--- Result / manual edits (3.1) ---
+Generated as specified: web/doc.go, web/templates.go (Templates() over fs.Sub), web/static.go (Static()
+over fs.Sub(staticFS, "static")), migrations/embed.go (migrations.FS), repository.MigrateFS with
+Migrate(dsn, dir) as the on-disk wrapper, applyMigrations in cmd/api/main.go and the same switch inline
+in cmd/bootstrap/main.go (an empty MIGRATIONS_PATH selects the embedded set; the api logs which source
+it used), app.Config{Templates, Static, CookieSecure} with a panic on a nil filesystem, COOKIE_SECURE
+read by envBool, make build, the Dockerfile without COPY migrations and MIGRATIONS_PATH,
+docker-compose.yml with COOKIE_SECURE instead of MIGRATIONS_PATH, .env.example with MIGRATIONS_PATH
+commented out. Manual edits: the variable named `migrations` in both mains became migrationsDir because
+it shadowed the imported package; internal/testdb now migrates with migrations.FS and lost MigrationsDir
+and its path arithmetic. Tests adapted by hand: newRouter passes web.Templates() and web.Static(),
+TestNewRouterPanicsWithoutTemplatesOrStatic, TestMigrateFSAppliesTheEmbeddedSet (three up/down pairs in
+the embedded set, idempotent, schema version 3), the on-disk Migrate test points at ../../migrations, the
+bootstrap test runs without MIGRATIONS_PATH. Verified: go test ./... -race (only the Lesson 10 web
+acceptance tests stay red), go mod tidy unchanged, docker compose config -q, docker compose build api,
+and bin/api copied alone into an empty directory and started without MIGRATIONS_PATH against the compose
+database: "migrations: applying the embedded set", "schema version 3" on a fresh database, GET /health
+200, GET /api/v1/albums 200.
 
 === Prompt 2.2: HTMX interactivity, web handlers and the cookie session (internal/handler/web, middleware) ===
 
