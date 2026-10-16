@@ -1,16 +1,17 @@
-ok  	homework/cmd/api	1.461s
-ok  	homework/cmd/bootstrap	4.918s
+ok  	homework/cmd/api	1.823s
+ok  	homework/cmd/bootstrap	4.292s
 ?   	homework/docs	[no test files]
-ok  	homework/internal/app	23.658s
-ok  	homework/internal/auth	4.478s
-ok  	homework/internal/handler	10.492s
-ok  	homework/internal/handler/web	4.508s
-ok  	homework/internal/middleware	1.341s
-ok  	homework/internal/model	1.302s
-ok  	homework/internal/repository	2.327s
+ok  	homework/internal/app	23.150s
+ok  	homework/internal/auth	4.492s
+ok  	homework/internal/handler	10.611s
+ok  	homework/internal/handler/web	5.399s
+ok  	homework/internal/middleware	1.415s
+ok  	homework/internal/model	1.371s
+ok  	homework/internal/repository	23.899s
 ?   	homework/internal/testdb	[no test files]
 ?   	homework/migrations	[no test files]
-ok  	homework/web	1.316s
+ok  	homework/web	1.388s
 
-# top-level tests passed (go test ./... -race -count=1 -v | grep -c "^--- PASS"): 125
-# web handler tests on fakes (internal/handler/web): 27 subtests
+# top-level tests passed (go test ./... -race -count=1 -v | grep -c "^--- PASS"): 127
+# subtests passed (grep -c "^    --- PASS"): 168
+# web handler tests on fakes (internal/handler/web): 31 subtests

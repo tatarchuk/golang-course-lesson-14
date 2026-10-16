@@ -1,4 +1,4 @@
-== smoke test against http://localhost:8080 (tag 1792156975)
+== smoke test against http://localhost:8080 (tag 1792159526)
 PASS: /health returns status ok
 PASS: Swagger UI is served
 PASS: CORS preflight is handled
@@ -78,7 +78,9 @@ PASS: DELETE /albums/{id} -> 204
 PASS: GET deleted album -> 404
 PASS: DELETE /albums/{unknown} -> 404
 PASS: GET /catalog renders the layout and the search form without delete buttons for a visitor
+PASS: Pages carry Content-Security-Policy, X-Frame-Options and nosniff
 PASS: GET /static/app.css is served from the binary
+PASS: Static assets are cacheable and nosniff
 PASS: GET /static/htmx.min.js is served from the binary (htmx 2.0.11)
 PASS: No directory listing and a 404 for a missing asset
 PASS: POST /albums creates the album the web checks search for and delete

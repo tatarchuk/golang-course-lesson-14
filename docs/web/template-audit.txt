@@ -3,7 +3,7 @@
 $ grep -rn '"text/template"' --include='*.go' .   # must be empty: only html/template is imported
 (no matches)
 
-$ grep -rnE 'template\.HTML\b' --include='*.go' cmd internal web   # must be empty: nothing is ever marked as safe HTML
+$ grep -rnE 'template\.(HTML|HTMLAttr|JS|JSStr|URL|CSS|Srcset)\b' --include='*.go' cmd internal web   # must be empty: nothing is ever marked as safe content
 (no matches)
 
 $ grep -rn '"html/template"' --include='*.go' . | grep -v _test.go   # the one place templates are parsed
@@ -16,12 +16,12 @@ web/templates/catalog.html:5:  <input type="search" name="q" value="{{.Query}}" 
 web/templates/catalog.html:18:      {{if .CanDelete}}<th class="actions"></th>{{end}}
 web/templates/catalog.html:22:    {{template "album_rows" .}}
 web/templates/catalog.html:26:{{end}}
-web/templates/layout.html:6:  <title>{{block "title" .}}Albums{{end}}</title>
-web/templates/layout.html:14:      {{if .User}}
-web/templates/layout.html:15:      <span class="user">{{.User.Email}} ({{.User.Role}})</span>
-web/templates/layout.html:17:      {{else}}
-web/templates/layout.html:19:      {{end}}
-web/templates/layout.html:23:    {{block "content" .}}{{end}}
+web/templates/layout.html:7:  <title>{{block "title" .}}Albums{{end}}</title>
+web/templates/layout.html:15:      {{if .User}}
+web/templates/layout.html:16:      <span class="user">{{.User.Email}} ({{.User.Role}})</span>
+web/templates/layout.html:18:      {{else}}
+web/templates/layout.html:20:      {{end}}
+web/templates/layout.html:24:    {{block "content" .}}{{end}}
 web/templates/login.html:1:{{define "title"}}Log in - Albums{{end}}
 web/templates/login.html:2:{{define "content"}}
 web/templates/login.html:4:{{if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
@@ -36,7 +36,7 @@ web/templates/partials/album_row.html:7:  <td>{{.Label}}</td>
 web/templates/partials/album_row.html:8:  <td class="availability">{{.Available}}/{{.Total}}</td>
 web/templates/partials/album_row.html:9:  {{if .CanDelete}}<td class="actions"><button type="button" class="danger" hx-delete="/web/albums/{{.ID}}" hx-target="closest tr" hx-swap="outerHTML" hx-confirm="Delete this album?">Delete</button></td>{{end}}
 web/templates/partials/album_row.html:11:{{end}}
-web/templates/partials/album_rows.html:1:{{define "album_rows"}}{{range .Albums}}{{template "album_row" .}}{{else}}<tr class="empty"><td colspan="7">No albums match your search.</td></tr>{{end}}{{end}}
+web/templates/partials/album_rows.html:1:{{define "album_rows"}}{{range .Albums}}{{template "album_row" .}}{{else}}<tr class="empty"><td colspan="{{if .CanDelete}}7{{else}}6{{end}}">No albums match your search.</td></tr>{{end}}{{end}}
 
 # Context of every dynamic value (html/template escapes each one for the context it lands in):
 #   .Title .Artists .Genre .Label .ReleaseYear .Available .Total  -> text inside <td>: < > & " ' become entities
@@ -49,12 +49,12 @@ web/templates/partials/album_rows.html:1:{{define "album_rows"}}{{range .Albums}
 
 # Live check against the running binary: an album whose title is HTML, and a search query that is a tag.
 $ curl -s -X POST localhost:8080/api/v1/albums -H 'Authorization: Bearer <admin token>' -H 'Content-Type: application/json' -d '{"title": "<script>alert(\"x\")</script> & \"quotes\"", "label": "Audit Label", "genre_id": 1, "artist_ids": [1]}'
--> HTTP 201 (id 12)
+-> HTTP 201 (id 14)
 $ curl -s localhost:8080/catalog | grep -o '<td class="title">[^<]*</td>' | grep -i alert
 <td class="title">&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#34;quotes&#34;</td>
 $ curl -s 'localhost:8080/catalog?q=%3Cb%3Ex%3C/b%3E' | grep -o 'value="[^"]*"'
 value="&lt;b&gt;x&lt;/b&gt;"
 $ curl -s -H 'HX-Request: true' 'localhost:8080/web/albums?q=alert' | grep -c '<script>'   # the raw tag never reaches the browser
 0
-$ curl -s -o /dev/null -w '%{http_code}' -X DELETE localhost:8080/api/v1/albums/12 -H 'Authorization: Bearer <admin token>'   # clean up
+$ curl -s -o /dev/null -w '%{http_code}' -X DELETE localhost:8080/api/v1/albums/14 -H 'Authorization: Bearer <admin token>'   # clean up
 204

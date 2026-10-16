@@ -99,7 +99,7 @@ go test ./internal/app/ -run Web -v           # приймальні тести 
 go test ./internal/app/ -run 'Auth|RBAC' -v   # приймальні тести Теми 9
 make test                                     # go test ./... -race -count=1 з TEST_DATABASE_URL із .env
 go test ./internal/model ./internal/handler ./internal/middleware ./internal/auth   # без бази даних
-go test ./internal/handler/web                # тести вебобробників на фейках (27 підтестів), без бази
+go test ./internal/handler/web                # тести вебобробників на фейках (31 підтестів), без бази
 gofmt -l . && go vet ./...
 scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-тесту CI (100 перевірок) проти запущеного стека (після bootstrap)
 ```
@@ -118,7 +118,8 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
   (`invalid_reference`), дублікати (`conflict`), список із фільтром і пагінацією, повна заміна у `PUT`,
   каскад при видаленні, примірники та доступність, ідемпотентність міграцій, guard-тест
   `TestListQueryCountIsConstant` на N+1, `UserRepository`, `TestMigrationAddsPasswordHashColumn`,
-  `TestMigrateFSAppliesTheEmbeddedSet` (вбудований набір: 3 пари up/down, повторний запуск — no-op, версія 3).
+  `TestMigrateFSAppliesTheEmbeddedSet` (вбудований набір: 3 пари up/down, повторний запуск — no-op, версія 3);
+  `TestOpenLogsSQLWithoutValues` тепер покриває і `Scan`-запит наявності (значення не потрапляють у лог).
   Тема 10: пошук за назвою або виконавцем без урахування регістру (`ListOptions.Query`: `ILIKE`,
   екранування `%`, `_` і `\`, поєднання з фільтром за жанром і пагінацією, та сама кількість `SELECT`,
   що й без пошуку) і `AvailabilityForAlbums` одним запитом для цілої сторінки (альбоми без примірників
@@ -132,16 +133,18 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
   до репозиторію як `Query` і повертається у поле), фрагмент рядків (лише `<tr>`, порожній рядок, кнопка для
   `staff`, `303` без `HX-Request`), матриця на `DELETE /web/albums/{id}` (`401`/`403`/`200`/`404`/`400`,
   Bearer-заголовок ігнорується, крос-сайт `403`, перевіряється, що саме дійшло до репозиторію), логін і логаут
-  (атрибути cookie й claims токена, однакові тіла двох невдач без `Set-Cookie`, `400` для нечитабельної форми).
+  (атрибути cookie й claims токена, `Secure` за `COOKIE_SECURE`, однакові тіла двох невдач без `Set-Cookie`, `400`
+  для нечитабельної форми та для тіла понад 16 КіБ), порожній рядок на 6 або 7 колонок.
 - `internal/middleware`: паніка → 500, CORS (з `Authorization`), логування, `Auth` (сім видів хибних
   облікових даних → `401`), `RequireRole` (`401`/`403`).
   Тема 10: `CookieAuth` (валідна cookie кладе claims у контекст; відсутня, прострочена, з іншим секретом
   чи під іншим ім'ям — анонімний запит без відповіді-помилки; заголовок `Authorization` ігнорується) і
-  пара `CookieAuth` + `RequireRole` (`401`/`403`/прохід із кодами API).
+  пара `CookieAuth` + `RequireRole` (`401`/`403`/прохід із кодами API); `SecurityHeaders` (CSP, `nosniff`, `DENY`,
+  `Referrer-Policy`).
 - `internal/app`: e2e через `NewRouter()` і реальну БД: сценарій smoke-тесту CI, граничні випадки
   контракту Теми 7, приймальні тести Теми 9 (`auth_test.go`, `rbac_test.go`) і Теми 10 (`web_test.go`:
   `TestWebCatalogPage`, `TestWebAlbumRowsFragment`, `TestWebDeleteRow`, `TestWebLoginAndLogout`,
-  `TestWebStaticAssets`; таблиця в розділі [Частина 3](#частина-3-goembed-і-тести));
+  `TestWebStaticAssets`, `TestWebSecurityHeadersAndRootFallback`; таблиця в розділі [Частина 3](#частина-3-goembed-і-тести));
   `TestNewRouterPanicsWithoutSecret` фіксує fail fast без секрету.
 - `web`: шаблони розбираються з вбудованої файлової системи так само, як в обробниках (макет і партіали
   один раз, клон на сторінку); сторінка каталогу рендерить рядки, наявність `2/3`, кнопки видалення лише
@@ -153,8 +156,8 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
 CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), тепер «Theme 8 + Theme 9 +
 Theme 10 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
 smoke-тест API та вебінтерфейсу. Додано для Теми 10. У статичній джобі: обов'язкові файли `web/`,
-`migrations/embed.go`, вебобробники з їхніми тестами, `prompts.txt`; лише `html/template` і жодного
-`template.HTML`; `go:embed` і `fs.Sub` у `web/`, `ParseFS` без `ParseGlob`; вбудовані міграції без `COPY
+`migrations/embed.go`, вебобробники з їхніми тестами, `prompts.txt`; лише `html/template` і жодного з типів
+`template.HTML`, `HTMLAttr`, `JS`, `JSStr`, `URL`, `CSS`, `Srcset`; `go:embed` і `fs.Sub` у `web/`, `ParseFS` без `ParseGlob`; вбудовані міграції без `COPY
 migrations` у `Dockerfile`; прапорці cookie (`HttpOnly`, `SameSite=Lax`), `CrossOriginProtection` в `app.go`,
 `CookieAuth` без `Authorization` і `Auth` без cookie; контрольна сума htmx 2.0.11; `COOKIE_SECURE` у
 `.env.example` і `docker-compose.yml`; `make build`; JWT-guard охоплює й `prompts.txt`. В інтеграційній
@@ -162,8 +165,9 @@ migrations` у `Dockerfile`; прапорці cookie (`HttpOnly`, `SameSite=Lax`
 порожньої теки без `MIGRATIONS_PATH` (у лозі має бути `applying the embedded set`) і веб smoke-тест: сторінка
 каталогу й статика, фрагмент за `HX-Request` і `303` без нього, cookie-вхід адміністратора з `#HttpOnly_` у
 cookie jar, матриця видалення (анонім `401`, member `403`, Bearer `401`, крос-сайт `403`, адміністратор —
-порожній `200`, альбом зникає з API і з фрагмента), логаут прострочує cookie, `GET /catalog` коштує не більше
-5 `SELECT`, у лозі сервера немає токенів. Локальний повтор: `scripts/smoke.sh` дає 100/100
+порожній `200`, альбом зникає з API і з фрагмента), логаут прострочує cookie, сторінки несуть `Content-Security-Policy`,
+`X-Frame-Options` і `nosniff`, статика кешується, анонімний `GET /catalog` коштує не більше 5 `SELECT`, у лозі
+сервера немає токенів. Локальний повтор: `scripts/smoke.sh` дає 102/102
 ([docs/web/smoke.txt](docs/web/smoke.txt)). <!-- TODO (крок 7): посилання на зелений запуск CI. -->
 
 ### Документація API
@@ -188,7 +192,7 @@ HTMX (`web/static/htmx.min.js`, зафіксована версія 2.x) без 
 
 | Запит | Доступ | Відповідь |
 |---|---|---|
-| `GET /catalog?q=` | публічний | `200` HTML: макет, форма пошуку (`name="q"`), таблиця альбомів (назва, виконавці, жанр, рік, лейбл, примірники `доступно/усього`); `q` фільтрує на сервері за назвою або виконавцем без урахування регістру і повертається в поле |
+| `GET /catalog?q=` | публічний | `200` HTML: макет, форма пошуку (`name="q"`), таблиця альбомів (назва, виконавці, жанр, рік, лейбл, примірники `доступно/усього`); `q` фільтрує на сервері за назвою або виконавцем без урахування регістру і повертається в поле; показує перші 50 збігів за `id`, пагінації в UI немає |
 | `GET /web/albums?q=` | публічний | із заголовком `HX-Request: true` → `200` лише рядки `<tr>` (порожній результат → один `<tr class="empty">`); без заголовка → `303` на `/catalog?q=` |
 | `DELETE /web/albums/{id}` | `staff`, `admin` (лише cookie) | `200` з порожнім тілом, альбом і примірники видалено; анонімний → `401`, `member` → `403`, заголовок `Authorization` ігнорується (`401`), невідомий id → `404`, нечисловий → `400`; крос-сайтовий запит → `403` |
 | `GET /login` | публічний | `200` форма входу |
@@ -207,6 +211,12 @@ Cookie сесії `albums_token` містить той самий HS256 JWT, щ�
 перетинаються. Крос-сайтовий запит на будь-який вебмаршрут зі зміною стану відхиляє
 `http.CrossOriginProtection` (перевірка `Sec-Fetch-Site`/`Origin`, Go 1.25) з тим самим конвертом `403`
 `forbidden`. Докладніше в розділі [Частина 1](#частина-1-архітектура-вебшару-та-аудит-автоекранування).
+
+Відомі обмеження: токен без стану діє до `exp` і після логауту чи видалення акаунта (сторінка й фрагмент показують
+такий акаунт як анонімний, але `DELETE /web/albums/{id}` довіряє ролі з токена, як і staff-маршрути API); на
+`401`/`403`/`404` із маршруту видалення HTMX не виконує swap, тож рядок лишається без повідомлення (стан видно після
+перезавантаження сторінки); обмеження частоти входу немає ні для форми, ні для `POST /api/v1/auth/login`
+(відстежено з Теми 9).
 
 ## API
 
@@ -449,27 +459,36 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
   вебмаршрути — лише cookie `albums_token` (`internal/middleware/cookie.go:16`; маршрути в
   `internal/app/app.go:92-106`). Cookie без заголовка не дає доступу до API, заголовок без cookie — до
   вебмаршрутів (`TestWebDeleteRow`: Bearer → `401`), тож CSRF-поверхня обмежена вебмаршрутами, які захищені
-  `SameSite=Lax` (`internal/handler/web/auth.go:59-67`) і `http.CrossOriginProtection` (`app.go:96-99`, відповідь —
+  `SameSite=Lax` (`internal/handler/web/auth.go:64-74`) і `http.CrossOriginProtection` (`app.go:96-99`, відповідь —
   конверт `403 forbidden`).
 - **Анонімний запит замість помилки.** `CookieAuth` ніколи не відхиляє запит: відсутня чи хибна cookie означає
   анонімного відвідувача (публічний каталог рендериться без кнопок), а `401`/`403` дає наявний `RequireRole` на
   маршруті видалення — ті самі коди й конверт помилок, що й в API (`app.go:93-95`, `TestCookieAuthWithRequireRole`).
+  Сторінка й фрагмент показують cookie видаленого акаунта як анонімного відвідувача, але маршрут видалення довіряє
+  ролі з токена до `exp`, як і staff-маршрути API (stateless JWT, див. «Відомі обмеження» вище).
 - **Порожній `200` замість `204`** на `DELETE /web/albums/{id}` (`internal/handler/web/catalog.go:63-73`): HTMX не
   виконує swap на `204`, а порожній `200` з `hx-swap="outerHTML"` прибирає рядок. API-маршрут
   `DELETE /api/v1/albums/{id}` і далі відповідає `204`.
 - **Пошук і наявність без N+1.** `ListOptions.Query` додає `ILIKE ... ESCAPE '\'` за назвою й виконавцем до того
   самого запиту з `Preload` (`internal/repository/album_repository.go:92-97`, екранування в `likePattern`, `:239`);
   наявність примірників для всієї сторінки читається одним `GROUP BY` (`internal/repository/copy_repository.go:72`,
-  виклик в `internal/handler/web/view.go:76-85`), тож `GET /catalog` коштує 5 `SELECT` незалежно від кількості
-  альбомів ([docs/web/queries-catalog.txt](docs/web/queries-catalog.txt)).
+  виклик в `internal/handler/web/view.go:76-85`), тож `GET /catalog` коштує 5 `SELECT` для анонімного відвідувача
+  (+1 `users.Get` для залогіненого) незалежно від кількості альбомів ([docs/web/queries-catalog.txt](docs/web/queries-catalog.txt)).
 - **Один набір шаблонів на сторінку.** `layout.html` + партіали розбираються один раз, кожна сторінка — клон із
   власним `content` (`internal/handler/web/templates.go:28-44`); відповідь спершу рендериться в буфер
-  (`templates.go:58-68`), тож помилка шаблону дає `500`, а не пів сторінки. Лише `html/template`, без
+  (`templates.go:58-67`), тож помилка шаблону дає `500`, а не пів сторінки. Лише `html/template`, без
   `template.HTML` ([docs/web/template-audit.txt](docs/web/template-audit.txt)).
 - **Усе в бінарнику.** Шаблони, статика (включно з HTMX) і міграції вбудовані через `go:embed` (`web/templates.go:8`,
   `web/static.go:8`, `migrations/embed.go:11`); `MIGRATIONS_PATH` — лише перевизначення для розробки
   (`cmd/api/main.go:121`, `internal/repository/migrate.go:22,46`); образ Docker більше не копіює `migrations/`;
-  статика роздається через `StaticFiles` без лістингу тек (`internal/handler/web/static.go:14`).
+  статика роздається через `StaticFiles` без лістингу тек (`internal/handler/web/static.go:16`).
+- **Заголовки для браузера.** Сторінки йдуть із `Content-Security-Policy: default-src 'self'; frame-ancestors 'none';
+  base-uri 'self'; form-action 'self'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` і
+  `Referrer-Policy: same-origin` (`internal/middleware/security.go`), а HTMX не вставляє власний `<style>`
+  (`includeIndicatorStyles: false` у `layout.html`), тож політика тримається без `'unsafe-inline'`; статика
+  кешується на добу з `nosniff` (`Cache-Control: public, max-age=86400`: у вбудованих файлів немає mtime для
+  валідаторів); тіло форми входу обмежене 16 КіБ (`internal/handler/web/auth.go:13,30`). Усе це додано за
+  підсумками [фінального рев'ю](#фінальне-ревю).
 
 ## Lesson 10 Report: Full-Stack Go з HTMX та go:embed
 
@@ -494,7 +513,7 @@ JavaScript, якого Тема 10 уникає. Ціна cookie — CSRF: бр�
 (перевіряє `Sec-Fetch-Site`/`Origin` для небезпечних методів) і жорстке розділення: API не читає cookie,
 вебмаршрути не читають `Authorization`.
 
-У коді: cookie ставить `sessionCookie` (`internal/handler/web/auth.go:59-67`) після `handler.Authenticate`
+У коді: cookie ставить `sessionCookie` (`internal/handler/web/auth.go:64-74`) після `handler.Authenticate`
 (`internal/handler/authenticate.go`) — тієї самої перевірки, що й в API, тож невідомий e-mail і хибний пароль дають
 побайтово однакову сторінку `401` без `Set-Cookie` (`TestWebLoginAndLogout`); `CookieAuth` читає лише cookie
 (`internal/middleware/cookie.go:16`), `Auth` — лише заголовок; вебгрупа в `internal/app/app.go:88-106` обгорнута
@@ -512,7 +531,7 @@ JavaScript, якого Тема 10 уникає. Ціна cookie — CSRF: бр�
 `&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#34;quotes&#34;`, запит у полі — `value="&lt;b&gt;x&lt;/b&gt;"`, а
 фрагмент рядків не містить жодного `<script>`; те саме фіксують `TestCatalogPageRendersRowsAndEscapes` (пакет `web`),
 `TestCatalogPage` (фейки) і `TestWebCatalogPage` (приймальний). CI-перевірки «Only html/template» і «template.HTML
-is never used» стежать, щоб так і лишалося.
+and the other safe-content types are never used» стежать, щоб так і лишалося.
 
 ### Тест ізоляції єдиного бінарника
 
@@ -522,7 +541,7 @@ is never used» стежать, щоб так і лишалося.
 make build                                        # CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/api ./cmd/api
 DIR=$(mktemp -d /tmp/verify_albums.XXXXXX) && cp bin/api "$DIR"/ && cd "$DIR"
 set -a; . "$OLDPWD/.env"; set +a; unset MIGRATIONS_PATH     # лише DATABASE_URL і JWT_SECRET мають значення
-./api                                             # лише DATABASE_URL і JWT_SECRET; ні web/, ні migrations/ поруч немає
+./api                                             # ні web/, ні templates/, ні migrations/ поруч немає
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/catalog
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/app.css
 curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/htmx.min.js
@@ -537,15 +556,18 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/h
 системні бібліотеки (так злінковано кожен Go-бінарник на Darwin, власних залежностей немає), а збірка `GOOS=linux`
 з тими самими прапорцями — `ELF 64-bit ... statically linked`; те саме перевіряє CI (`file bin/api` на Ubuntu і
 запуск із `mktemp -d`). Браузер (headless Chrome 155 проти того самого процесу): [каталог](docs/screenshots/catalog.png),
-[пошук](docs/screenshots/catalog-search.png), [вхід](docs/screenshots/login.png). SQL-лог однієї сторінки:
-[docs/web/queries-catalog.txt](docs/web/queries-catalog.txt), 5 `SELECT`.
+[пошук](docs/screenshots/catalog-search.png), [вхід](docs/screenshots/login.png). Живий пошук перевірено в
+Chrome 155 через розширення: введення `kid` у поле оновило таблицю запитом `GET /web/albums` без перезавантаження
+сторінки (адреса лишилася `/catalog`), консоль без помилок і без порушень Content-Security-Policy. SQL-лог однієї
+сторінки: [docs/web/queries-catalog.txt](docs/web/queries-catalog.txt): 5 `SELECT` для анонімного відвідувача, +1 для
+залогіненого.
 
 ### Частина 2. Промпти для генерації коду
 
 Промпти складено до генерації і збережено у [prompts.txt](prompts.txt); виконуються в цьому репозиторії
 через Claude Code (Claude Fable 5.1) у порядку 2.1 → 3.1 → 2.2 → 3.2 (обробники 2.2 споживають вбудовані
-файлові системи з 3.1). Код пишеться test-first: приймальні тести `internal/app/web_test.go` написано
-першими і вони червоні.
+файлові системи з 3.1). Код писався test-first: приймальні тести `internal/app/web_test.go` написано першими,
+вони були червоними до кроків 2–4 і зелені відтоді ([до](docs/web/tests-before.txt), [після](docs/web/tests-after.txt)).
 
 **2.1. Макет, сторінка каталогу, партіали, сторінка входу.** Промпт фіксує контракт даних шаблонів
 (`.Title`, `.User`, `.CanDelete`, `.Query`, `.Albums`, `.Error`; рядок з `.ID`, `.Title`, `.Artists`,
@@ -571,7 +593,7 @@ test-first (`internal/repository/catalog_search_test.go`, `internal/middleware/c
 без змін), `internal/middleware/cookie.go`, пакет `internal/handler/web` і вебгрупу в `app.go` під
 `http.CrossOriginProtection` з JSON-конвертом `403`. Ручні відхилення від промпту: `StaticFiles` відповідає
 JSON `404` і для відсутнього файлу, не лише для теки; фрагмент рядків визначає відвідувача тим самим
-пошуком акаунта, що й сторінка (cookie видаленого акаунта рендериться анонімно скрізь); `GET /login` теж
+пошуком акаунта, що й сторінка (cookie видаленого акаунта рендериться анонімно на сторінці й у фрагменті; маршрут видалення довіряє токену до `exp`); `GET /login` теж
 за `CookieAuth`, щоб залогінений бачив свій акаунт у шапці. Приймальні тести Теми 10 позеленіли з першого
 запуску після реалізації.
 
@@ -615,28 +637,55 @@ FAIL	homework/internal/app	1.568s
 | `TestWebAlbumRowsFragment` | `HX-Request` → лише `<tr>` (без `<html`, `<table`), збіг за назвою і за виконавцем без регістру, екранування у фрагменті, один `<tr class="empty">` без збігів, кнопка видалення лише для `staff`; без заголовка → `303` на `/catalog?q=` |
 | `TestWebDeleteRow` | анонімний `401`, `member` `403`, Bearer-заголовок без cookie `401`, прострочена cookie `401`, `Sec-Fetch-Site: cross-site` `403`; відхилені запити нічого не змінюють; `staff`/`admin` → порожній `200`, альбом і примірники зникли; `404` і `400` для невідомого й нечислового id |
 | `TestWebLoginAndLogout` | форма входу; успішний вхід → `303` і cookie з `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=86400`, без `Secure`; cookie показує e-mail і роль у шапці; невідомий e-mail і хибний пароль → побайтово однакові `401` без `Set-Cookie`; логаут прострочує cookie |
-| `TestWebStaticAssets` | `app.css` і `htmx.min.js` з правильними типами, `404` для невідомого файлу, лістинг `/static/` не віддається |
+| `TestWebStaticAssets` | `app.css` і `htmx.min.js` з правильними типами, `Cache-Control` і `nosniff`, `404` для невідомого файлу, лістинг `/static/` не віддається |
+| `TestWebSecurityHeadersAndRootFallback` | CSP, `X-Frame-Options`, `nosniff` і `Referrer-Policy` на сторінках і їх відсутність в API; `GET /` лишається JSON `404` |
 
 Після реалізації (кроки 2–4) приймальні тести позеленіли, а завдання 3.2 додало табличні тести обробників на
 фейках у `internal/handler/web/catalog_test.go` (`TestCatalogPage`, `TestRowsFragment`, `TestDeleteRow`,
-`TestLoginAndLogout`; 27 підтестів без бази, маршрутизація як в `app.go`, тож `PathValue`, `CookieAuth`,
+`TestLoginAndLogout`; 31 підтест без бази, маршрутизація як в `app.go`, тож `PathValue`, `CookieAuth`,
 `RequireRole` і `CrossOriginProtection` працюють як у продакшені). Повний прогін
 ([docs/web/tests-after.txt](docs/web/tests-after.txt)):
 
 ```text
 $ go test ./... -race -count=1
-ok  	homework/cmd/api	1.461s
-ok  	homework/cmd/bootstrap	4.918s
+ok  	homework/cmd/api	1.823s
+ok  	homework/cmd/bootstrap	4.292s
 ?   	homework/docs	[no test files]
-ok  	homework/internal/app	23.658s
-ok  	homework/internal/auth	4.478s
-ok  	homework/internal/handler	10.492s
-ok  	homework/internal/handler/web	4.508s
-ok  	homework/internal/middleware	1.341s
-ok  	homework/internal/model	1.302s
-ok  	homework/internal/repository	2.327s
+ok  	homework/internal/app	23.150s
+ok  	homework/internal/auth	4.492s
+ok  	homework/internal/handler	10.611s
+ok  	homework/internal/handler/web	5.399s
+ok  	homework/internal/middleware	1.415s
+ok  	homework/internal/model	1.371s
+ok  	homework/internal/repository	23.899s
 ?   	homework/internal/testdb	[no test files]
 ?   	homework/migrations	[no test files]
-ok  	homework/web	1.316s
-# top-level tests passed: 125
+ok  	homework/web	1.388s
+# top-level tests passed: 127, subtests: 168
 ```
+
+### Фінальне рев'ю
+
+Коли код і документація були готові, окремий агент (Claude Code, свіжий контекст, лише читання; промпт у
+[prompts.txt](prompts.txt), розділ «Final review») перечитав увесь diff Теми 10, README, умову, докази й CI.
+Необроблений звіт: [docs/web/review-raw.md](docs/web/review-raw.md). Високих знахідок немає; тріаж 13 низьких:
+
+| № | Знахідка | Рішення |
+|---|---|---|
+| 1 | `Scan`-запити GORM логуються через `logger.Recorder`, який ігнорує `ParameterizedQueries`: запит наявності потрапляв у лог зі значеннями (видно в першій версії `queries-catalog.txt`) | **Fixed Now**: `logger.RecorderParamsFilter` у `repository.Open` прибирає параметри; `TestOpenLogsSQLWithoutValues` покриває `Scan`; докази перегенеровано — тепер `$1$` |
+| 2 | Cookie видаленого чи пониженого акаунта діє на маршруті видалення до `exp`, хоча сторінка показує його анонімним | **Documented**: та сама stateless-семантика, що й у staff-маршрутів API; описано у «Відомих обмеженнях» і в «Рішеннях Теми 10» |
+| 3 | `ParseForm` без ліміту тіла (типово 10 МіБ) на неавтентифікованому маршруті з bcrypt; обмеження частоти немає | **Fixed Now** (ліміт 16 КіБ → `400`, тест) / **Tracked**: лімітер частоти для обох маршрутів входу, як і в Темі 9 |
+| 4 | Статика без `Cache-Control` (у вбудованих файлів немає mtime, тож браузер качає htmx щоразу) | **Fixed Now**: `Cache-Control: public, max-age=86400` + `nosniff`, тест і smoke |
+| 5 | Сторінки без CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` | **Fixed Now**: `middleware.SecurityHeaders` на вебгрупі, `includeIndicatorStyles: false` для htmx, тест, smoke, перевірка в браузері |
+| 6 | На `401`/`403`/`404` з маршруту видалення HTMX нічого не показує (рядок лишається) | **Documented** як відоме обмеження; `HX-Retarget` чи розширення `response-targets` — кандидат на наступну тему |
+| 7 | `colspan="7"` у порожньому рядку при шести колонках для відвідувача | **Fixed Now**: `{{if .CanDelete}}7{{else}}6{{end}}`, два тести |
+| 8 | CI-guard ловив лише `template.HTML`, не `HTMLAttr`/`JS`/`URL`/`CSS` | **Fixed Now**: regex розширено в workflow і в аудиті |
+| 9 | `prompts.txt` називав кількість підтестів, якої не було в доказах | **Fixed Now**: `tests-after.txt` тепер містить обидва лічильники, текст виправлено |
+| 10 | Три пункти контракту в умові перевіряв CI, а не тести; `Secure` не мав тесту | **Fixed Now**: тести на `GET /` → JSON `404` і на `Secure`; розділ умови перейменовано на «Що перевіряють тести і CI» |
+| 11 | «5 `SELECT`» без уточнення, що для залогіненого це 6 | **Fixed Now**: уточнено в трьох місцях |
+| 12 | Ліміт 50 рядків каталогу не був у README | **Fixed Now**: у таблиці вебмаршрутів |
+| 13 | Два діапазони рядків у посиланнях file:line зсунуті на один | **Fixed Now** |
+
+Після виправлень: `go test ./... -race` зелений (127 тестів верхнього рівня, 168 підтестів,
+[docs/web/tests-after.txt](docs/web/tests-after.txt)), `scripts/smoke.sh` 102/102
+([docs/web/smoke.txt](docs/web/smoke.txt)), докази в `docs/web/` перегенеровано тим самим скриптом.

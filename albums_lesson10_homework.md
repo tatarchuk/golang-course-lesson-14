@@ -95,7 +95,7 @@
 
 ---
 
-### Що перевіряють тести (`internal/app/web_test.go`, `internal/handler/web/catalog_test.go`)
+### Що перевіряють тести і CI (`internal/app/web_test.go`, `internal/handler/web/catalog_test.go`, workflow)
 
 - **`GET /catalog`** → `200`, `Content-Type: text/html; charset=utf-8`; тіло містить `<!doctype html>`, `<table`, `id="album-list"`, `<input name="q"` з трьома HTMX-атрибутами, `<script src="/static/htmx.min.js"` та `<link href="/static/app.css"`; назви альбомів екрануються (назва `<b>x</b>` виводиться як `&lt;b&gt;`); `?q=` фільтрує на сервері і повертається в поле вводу.
 - **`GET /web/albums?q=<текст>`** із `HX-Request: true` → `200` і лише елементи `<tr>` (без `<html`, `<table`); збіг за назвою або ім'ям виконавця без урахування регістру; нічого не знайдено → один `<tr class="empty">`; без заголовка → `303` на `/catalog?q=<текст>`.
@@ -207,7 +207,7 @@ Submit a link to the repository containing:
 
 ---
 
-### What the tests check (`internal/app/web_test.go`, `internal/handler/web/catalog_test.go`)
+### What the tests and CI check (`internal/app/web_test.go`, `internal/handler/web/catalog_test.go`, the workflow)
 
 - **`GET /catalog`** → `200`, `Content-Type: text/html; charset=utf-8`; the body contains `<!doctype html>`, `<table`, `id="album-list"`, `<input name="q"` with the three HTMX attributes, `<script src="/static/htmx.min.js"` and `<link href="/static/app.css"`; album titles are escaped (a title `<b>x</b>` renders as `&lt;b&gt;`); `?q=` filters server-side and is echoed into the input.
 - **`GET /web/albums?q=<text>`** with `HX-Request: true` → `200` and only `<tr>` elements (no `<html`, no `<table`); matches on the title or an artist name, case-insensitively; no match → one `<tr class="empty">`; without the header → `303` to `/catalog?q=<text>`.

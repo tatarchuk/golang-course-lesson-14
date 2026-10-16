@@ -363,5 +363,38 @@ TestDeleteRow (8 cases, including the cross-site refusal and the ids that reache
 TestLoginAndLogout (6 cases: the form, the cookie attributes and the claims inside the token, e-mail
 normalisation, the two indistinguishable failures, a malformed form body, logout). One manual edit: the
 malformed-form case first built its request twice; the final version sets the body once. Every case
-passed on the first run (go test ./internal/handler/web/ -race -v), and the full suite is green:
-docs/web/tests-after.txt records 125 top-level tests and 164 subtests under -race.
+passed on the first run (go test ./internal/handler/web/ -race -v), and the full suite is green.
+docs/web/tests-after.txt (regenerated after the final review added four cases) records 127 top-level
+tests and 168 subtests under -race, 31 of them in this package.
+
+=== Final review (the Lesson 9 convention, not a handout task) ===
+
+Launched as an independent agent with a fresh context and read-only access once the code and the
+documentation were complete:
+
+You are an independent reviewer with a fresh context. Review the Lesson 10 work in the repository (Go module
+`homework`, net/http ServeMux, GORM + pgx on PostgreSQL, html/template + htmx web UI added in this lesson).
+Strictly read-only. Scope: everything since commit e96a1cf. Review, in this order: 1) correctness and security
+of the web UI (cookie attributes and lifetime, the CSRF story, login indistinguishability, autoescaping of every
+template action, the static file handler, the LIKE escaping and the EXISTS search, the one-query availability,
+the 200-vs-204 delete, error paths); 2) consistency between README.md, the handout's test contract, the CI
+description, prompts.txt and the actual code, tests and workflow, including every file:line reference and
+every relative link and anchor; 3) hygiene (leftover markers, non-ASCII in .go files, anything that looks like
+a real JWT in docs/). Output a numbered list of findings (file:line, severity, what and why, proposed fix) and
+a list of what you checked and found correct.
+
+--- Result / triage ---
+The raw report is docs/web/review-raw.md: no High findings, 13 Low ones, and a list of what was checked and
+found correct (cookie, CSRF, login indistinguishability, autoescaping, static handler, LIKE/EXISTS,
+availability, 200 vs 204, logging, embedding, README vs code and CI, links, hygiene). Fixed Now: GORM Scan
+statements were logged with their bound values because logger.Recorder ignores ParameterizedQueries
+(repository.Open now sets logger.RecorderParamsFilter; TestOpenLogsSQLWithoutValues covers the Scan path);
+POST /login body limited to 16 KiB; Cache-Control and nosniff on the static assets; Content-Security-Policy,
+X-Frame-Options, nosniff and Referrer-Policy on the pages (middleware.SecurityHeaders, htmx indicator styles
+disabled so no 'unsafe-inline' is needed, verified in a browser); the empty row's colspan follows the visible
+columns; the CI guard covers every template safe-content type; tests for GET / -> JSON 404 and for the Secure
+flag; the subtest counts in this log; the SELECT-count wording; the 50-row page limit in the README; two line
+ranges. Documented as known limitations: the stateless token stays valid on the delete route until exp (the
+same semantics as the API's staff routes), htmx shows nothing on a 4xx from the delete route, and there is no
+login rate limit (tracked since Lesson 9). Verified afterwards: go test ./... -race (127 top-level tests,
+168 subtests), scripts/smoke.sh 102/102, the evidence under docs/web/ regenerated.
