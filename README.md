@@ -96,7 +96,7 @@ make test                                     # go test ./... -race -count=1 з 
 go test ./internal/model ./internal/handler ./internal/middleware ./internal/auth   # без бази даних
 go test ./internal/handler/web                # тести вебобробників на фейках (27 підтестів), без бази
 gofmt -l . && go vet ./...
-scripts/smoke.sh http://localhost:8080        # повтор API smoke-тесту CI проти запущеного стека (після bootstrap)
+scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-тесту CI (100 перевірок) проти запущеного стека (після bootstrap)
 ```
 
 Тести з базою (`internal/repository`, `internal/app`, `cmd/bootstrap`) читають `TEST_DATABASE_URL`;
@@ -145,13 +145,21 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
 - `cmd/bootstrap`: команда створює адміністратора, повторний запуск скидає пароль того самого рядка;
   без пароля або `DATABASE_URL` завершується помилкою; мігрує вбудованим набором, як і API.
 
-CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), «Theme 8 + Theme 9
-check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
-smoke-тест API з аутентифікацією. <!-- TODO (крок 6): перейменувати на "Theme 8 + 9 + 10 check"; перелічити нові перевірки
-(файли web/, лише html/template, без template.HTML, go:embed/ParseFS/fs.Sub, статичний бінарник з порожньої теки, вебмаршрути
-в smoke-тесті, cookie-сценарій, N+1 на /catalog) і дати посилання на зелений запуск. -->
-Приймальні тести Теми 10 після цього кроку червоні, тож до реалізації workflow очікувано падає на джобі
-з тестами.
+CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), тепер «Theme 8 + Theme 9 +
+Theme 10 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
+smoke-тест API та вебінтерфейсу. Додано для Теми 10. У статичній джобі: обов'язкові файли `web/`,
+`migrations/embed.go`, вебобробники з їхніми тестами, `prompts.txt`; лише `html/template` і жодного
+`template.HTML`; `go:embed` і `fs.Sub` у `web/`, `ParseFS` без `ParseGlob`; вбудовані міграції без `COPY
+migrations` у `Dockerfile`; прапорці cookie (`HttpOnly`, `SameSite=Lax`), `CrossOriginProtection` в `app.go`,
+`CookieAuth` без `Authorization` і `Auth` без cookie; контрольна сума htmx 2.0.11; `COOKIE_SECURE` у
+`.env.example` і `docker-compose.yml`; `make build`; JWT-guard охоплює й `prompts.txt`. В інтеграційній
+джобі: статична збірка `CGO_ENABLED=0` з перевіркою `file ... statically linked`, запуск бінарника самого з
+порожньої теки без `MIGRATIONS_PATH` (у лозі має бути `applying the embedded set`) і веб smoke-тест: сторінка
+каталогу й статика, фрагмент за `HX-Request` і `303` без нього, cookie-вхід адміністратора з `#HttpOnly_` у
+cookie jar, матриця видалення (анонім `401`, member `403`, Bearer `401`, крос-сайт `403`, адміністратор —
+порожній `200`, альбом зникає з API і з фрагмента), логаут прострочує cookie, `GET /catalog` коштує не більше
+5 `SELECT`, у лозі сервера немає токенів. Локальний повтор: `scripts/smoke.sh` дає 100/100
+([docs/web/smoke.txt](docs/web/smoke.txt)). <!-- TODO (крок 7): посилання на зелений запуск CI. -->
 
 ### Документація API
 
@@ -386,12 +394,12 @@ internal/testdb/                     спільне підключення дл�
 migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down) + embed.go: SQL-файли вбудовані в бінарник
 web/                                 вбудовані файли вебінтерфейсу (go:embed): templates.go, static.go, templates/ (layout, catalog, login, partials/album_row*), static/ (app.css, htmx.min.js 2.0.11)
 docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10)
-scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI з логіном), measure_n1.sh (N+1), render_er.sh
+scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI: API з логіном + вебінтерфейс із cookie jar), measure_n1.sh (N+1), render_er.sh
 Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) без теки migrations/ і стек postgres + api (JWT_SECRET обов'язковий, COOKIE_SECURE)
 Makefile, .env.example               щоденні команди (+ bootstrap, build) та приклад конфігурації (COOKIE_SECURE; MIGRATIONS_PATH закоментовано)
 albums_lesson10_homework.md          умова Теми 10, адаптована під варіант albums
 prompts.txt                          промпти завдань 2.1, 2.2, 3.1, 3.2 з нотатками про результат
-.github/workflows/theme8-check.yml   CI: структура, міграції, тести, smoke-тест з аутентифікацією
+.github/workflows/theme8-check.yml   CI «Theme 8 + 9 + 10»: структура й статичні правила (html/template, go:embed, cookie), міграції, тести, статичний бінарник з порожньої теки, API + веб smoke-тест
 ```
 
 

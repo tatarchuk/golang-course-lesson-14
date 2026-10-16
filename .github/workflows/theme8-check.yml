@@ -1,6 +1,7 @@
-name: Theme 8 + Theme 9 check
+name: Theme 8 + Theme 9 + Theme 10 check
 
-# CI of the course project: Theme 8 (PostgreSQL, GORM, migrations, N+1) and Theme 9 (bcrypt, JWT, RBAC) checks.
+# CI of the course project: Theme 8 (PostgreSQL, GORM, migrations, N+1), Theme 9 (bcrypt, JWT, RBAC) and
+# Theme 10 (html/template + htmx web UI, HttpOnly cookie session, go:embed single binary) checks.
 # Every check is reported in the job summary (Actions -> run -> Summary) as PASS/FAIL;
 # a step fails at the END if at least one check failed, so one run shows all problems.
 #
@@ -81,6 +82,14 @@ jobs:
             internal/middleware/auth.go internal/middleware/rbac.go
             internal/handler/auth_handler.go internal/handler/user_handler.go
             internal/repository/user_repository.go cmd/bootstrap/main.go
+            web/doc.go web/templates.go web/static.go
+            web/templates/layout.html web/templates/catalog.html web/templates/login.html
+            web/templates/partials/album_row.html web/templates/partials/album_rows.html
+            web/static/app.css web/static/htmx.min.js docs/web/htmx.sha256
+            migrations/embed.go internal/middleware/cookie.go internal/handler/authenticate.go
+            internal/handler/web/handler.go internal/handler/web/catalog.go internal/handler/web/auth.go
+            internal/handler/web/catalog_test.go internal/handler/web/fakes_test.go internal/app/web_test.go
+            README.md prompts.txt albums_lesson10_homework.md
           )
           missing=""
           for f in "${required[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
@@ -135,8 +144,33 @@ jobs:
           check "docker-compose.yml passes JWT_SECRET to the api" grep -q 'JWT_SECRET' docker-compose.yml
           auth_before_role() { grep -q 'protected(middleware.RequireRole' internal/app/app.go; }
           check "app.go wraps RequireRole inside Auth (Auth runs first)" auth_before_role
-          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md; }
-          check "No JWT committed under docs/ or in the README" no_tokens_in_docs
+          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md prompts.txt; }
+          check "No JWT committed under docs/, in the README or in prompts.txt" no_tokens_in_docs
+
+          # Theme 10: web UI, embedding, cookie session
+          header "Theme 10: static checks"
+          only_html_template() { ! grep -rn '"text/template"' --include=*.go .; }
+          check "Only html/template is imported (no text/template anywhere)" only_html_template
+          no_template_html() { ! grep -rnE 'template\.HTML\b' --include=*.go cmd internal web; }
+          check "template.HTML is never used (contextual autoescaping stays intact)" no_template_html
+          embed_web() { grep -q '^//go:embed templates/' web/templates.go && grep -q '^//go:embed static' web/static.go && grep -q 'fs.Sub(staticFS, "static")' web/static.go; }
+          check "web/templates.go and web/static.go embed the UI files (go:embed, fs.Sub)" embed_web
+          parsefs_only() { grep -rq 'ParseFS' internal/handler/web && ! grep -rn 'ParseGlob' --include=*.go .; }
+          check "Templates are parsed with ParseFS from the embedded FS, never ParseGlob" parsefs_only
+          embed_migrations() { grep -q '^//go:embed \*\.sql' migrations/embed.go && grep -q 'func MigrateFS' internal/repository/migrate.go && ! grep -q 'COPY migrations' Dockerfile; }
+          check "Migrations are embedded and the image ships no migrations/ directory" embed_migrations
+          cookie_flags() { grep -q 'HttpOnly: *true' internal/handler/web/auth.go && grep -q 'SameSiteLaxMode' internal/handler/web/auth.go; }
+          check "The session cookie is HttpOnly with SameSite=Lax" cookie_flags
+          check "Web routes run behind http.CrossOriginProtection (CSRF)" grep -q 'NewCrossOriginProtection' internal/app/app.go
+          two_surfaces() { ! grep -q 'Header.Get("Authorization")' internal/middleware/cookie.go && ! grep -q 'r.Cookie(' internal/middleware/auth.go; }
+          check "CookieAuth never reads the Authorization header and Auth never reads cookies" two_surfaces
+          htmx_pinned() { grep -q 'version:"2\.' web/static/htmx.min.js && grep -v '^#' docs/web/htmx.sha256 | sha256sum -c --quiet -; }
+          check "htmx is the pinned 2.x build and matches docs/web/htmx.sha256" htmx_pinned
+          check ".env.example defines COOKIE_SECURE" grep -q '^COOKIE_SECURE=' .env.example
+          check "docker-compose.yml passes COOKIE_SECURE to the api" grep -q 'COOKIE_SECURE' docker-compose.yml
+          check "Makefile builds the static binary (CGO_ENABLED=0)" grep -q 'CGO_ENABLED=0 go build' Makefile
+          web_tests_exist() { ls internal/handler/web/*_test.go internal/app/web_test.go web/*_test.go > /dev/null; }
+          check "Test files exist for the web handlers, the acceptance contract and the embedded templates" web_tests_exist
 
           env_not_tracked() { grep -qx '\.env' .gitignore && ! git ls-files --error-unmatch .env 2> /dev/null; }
           check ".env is ignored and not committed" env_not_tracked
@@ -289,10 +323,18 @@ jobs:
           source "$RUNNER_TEMP/check.sh"
           header "Theme 8: API smoke test"
 
-          build_app() { go build -o bin/api ./cmd/api; }
-          check "go build ./cmd/api" build_app
+          # Theme 10: the server is one statically linked binary that runs from an empty directory
+          # with nothing but the environment: no web/, no templates/, no migrations/ beside it.
+          build_app() { CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/api ./cmd/api; }
+          check "CGO_ENABLED=0 go build ./cmd/api" build_app
+          static_binary() { file bin/api | grep -q 'statically linked'; }
+          check "bin/api is statically linked (file)" static_binary
+          RUN_DIR=$(mktemp -d)
+          cp bin/api "$RUN_DIR/"
+          only_binary() { [ "$(ls -A "$RUN_DIR")" = "api" ]; }
+          check "The isolation directory holds only the binary" only_binary
 
-          DATABASE_URL="$APP_URL" MIGRATIONS_PATH=migrations PORT=8080 ./bin/api > app.log 2>&1 &
+          (cd "$RUN_DIR" && exec env DATABASE_URL="$APP_URL" PORT=8080 ./api) > app.log 2>&1 &
           echo $! > app.pid
           trap 'kill $(cat app.pid) 2>/dev/null || true' EXIT
 
@@ -307,6 +349,8 @@ jobs:
             exit 1
           fi
           pass "Server starts and /health answers 200"
+          embedded_migrations() { grep -q 'migrations: applying the embedded set' app.log && grep -q 'schema version 3' app.log; }
+          check "The server applied the embedded migrations (no MIGRATIONS_PATH, no directory)" embedded_migrations
 
           # Theme 9: the seed accounts have no password; the bootstrap command creates the admin.
           bootstrap_admin() { DATABASE_URL="$APP_URL" go run ./cmd/bootstrap -email admin@albums.local; }
@@ -480,6 +524,75 @@ jobs:
           cascade_links() { [ "$(psql "$APP_URL" -tA -c "SELECT count(*) FROM album_artists WHERE album_id=$ALBUM")" = "0" ]; }
           check "Deleting an album removes its artist links" cascade_links
           http "DELETE /albums/{unknown} -> 404" 404 DELETE /albums/999999
+
+          # Theme 10: the web UI (html/template + htmx) behind the cookie session
+          header "Theme 10: web UI smoke test"
+          WEB=http://localhost:8080
+          page() { curl -s -o page.html -D page.h -w '%{http_code}' "$@"; } # status to stdout, body in page.html, headers in page.h
+          catalog_anon() {
+            [ "$(page "$WEB/catalog")" = "200" ] && grep -qi '^content-type: text/html; charset=utf-8' page.h \
+              && grep -q '<!doctype html>' page.html && grep -q 'id="album-list"' page.html \
+              && grep -q 'hx-get="/web/albums"' page.html && grep -q 'hx-trigger="keyup changed delay:300ms"' page.html \
+              && grep -q 'src="/static/htmx.min.js"' page.html && grep -q 'Kind of Blue' page.html && ! grep -q 'hx-delete' page.html
+          }
+          check "GET /catalog renders the layout, the search form and the seed albums without delete buttons" catalog_anon
+          static_css() { [ "$(page "$WEB/static/app.css")" = "200" ] && grep -qi '^content-type: text/css' page.h; }
+          check "GET /static/app.css is served from the binary" static_css
+          static_js() { [ "$(page "$WEB/static/htmx.min.js")" = "200" ] && grep -qi '^content-type: text/javascript' page.h && grep -q 'version:"2.0.11"' page.html; }
+          check "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)" static_js
+          static_404() { [ "$(page "$WEB/static/")" = "404" ] && [ "$(page "$WEB/static/missing.css")" = "404" ]; }
+          check "No directory listing and a 404 for a missing asset" static_404
+          fragment() {
+            [ "$(page -H 'HX-Request: true' "$WEB/web/albums?q=blue")" = "200" ] && [ "$(tr -d '[:space:]' < page.html | head -c 3)" = "<tr" ] \
+              && grep -q 'Kind of Blue' page.html && ! grep -q 'Kid A' page.html && ! grep -qi '<html' page.html
+          }
+          check "HX-Request GET /web/albums?q=blue answers the matching rows only" fragment
+          fragment_redirect() { [ "$(page "$WEB/web/albums?q=blue")" = "303" ] && grep -qi '^location: /catalog?q=blue' page.h; }
+          check "A plain GET /web/albums redirects to /catalog?q=" fragment_redirect
+          anon_delete() { [ "$(page -X DELETE "$WEB/web/albums/1")" = "401" ] && grep -q '"unauthenticated"' page.html; }
+          check "Anonymous DELETE /web/albums/{id} -> 401" anon_delete
+
+          web_login() { curl -s -o /dev/null -c "$1" -w '%{http_code}' -X POST "$WEB/login" --data-urlencode "email=$2" --data-urlencode "password=$3"; }
+          admin_login() { [ "$(web_login admin.jar admin@albums.local "$ADMIN_PASSWORD")" = "303" ] && grep -q '^#HttpOnly_' admin.jar && grep -q 'albums_token' admin.jar; }
+          check "POST /login as admin -> 303 with an HttpOnly albums_token cookie" admin_login
+          bad_login() { [ "$(web_login bad.jar admin@albums.local wrong-password)" = "401" ] && ! grep -qs 'albums_token' bad.jar; }
+          check "POST /login with a wrong password -> 401 and no cookie" bad_login
+          catalog_admin() { [ "$(page -b admin.jar "$WEB/catalog")" = "200" ] && grep -q 'admin@albums.local (admin)' page.html && grep -q 'hx-delete="/web/albums/' page.html && grep -q 'action="/logout"' page.html; }
+          check "GET /catalog with the admin cookie shows the account and the delete buttons" catalog_admin
+          http "Register a member for the web checks" 201 POST /auth/register "{\"email\":\"web-member@albums.local\",\"password\":\"$ADMIN_PASSWORD\"}"
+          member_login() { [ "$(web_login member.jar web-member@albums.local "$ADMIN_PASSWORD")" = "303" ]; }
+          check "POST /login as a member -> 303" member_login
+          http "POST /albums creates the album the web UI will delete" 201 POST /albums "{\"title\":\"Web Delete\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART1]}"
+          WEB_ALBUM=$(jq -r '.id' resp.json)
+          member_delete() { [ "$(page -b member.jar -X DELETE "$WEB/web/albums/$WEB_ALBUM")" = "403" ] && grep -q '"forbidden"' page.html; }
+          check "Member DELETE /web/albums/{id} -> 403" member_delete
+          bearer_delete() { [ "$(page -H "Authorization: Bearer $AUTH_TOKEN" -X DELETE "$WEB/web/albums/$WEB_ALBUM")" = "401" ]; }
+          check "A bearer token is not a web session: DELETE /web/albums/{id} -> 401" bearer_delete
+          crosssite_delete() { [ "$(page -b admin.jar -H 'Sec-Fetch-Site: cross-site' -X DELETE "$WEB/web/albums/$WEB_ALBUM")" = "403" ] && grep -q 'cross-origin' page.html; }
+          check "Cross-site DELETE with a valid cookie -> 403 (CrossOriginProtection)" crosssite_delete
+          http "The album survived the rejected deletes" 200 GET "/albums/$WEB_ALBUM"
+          admin_delete() { [ "$(page -b admin.jar -X DELETE "$WEB/web/albums/$WEB_ALBUM")" = "200" ] && [ ! -s page.html ]; }
+          check "Admin DELETE /web/albums/{id} -> empty 200 (htmx swaps the row away)" admin_delete
+          http "The deleted album is gone from the API" 404 GET "/albums/$WEB_ALBUM"
+          fragment_gone() { [ "$(page -H 'HX-Request: true' "$WEB/web/albums?q=Web+Delete")" = "200" ] && grep -q 'class="empty"' page.html; }
+          check "The fragment no longer lists the deleted album" fragment_gone
+          logout() { [ "$(curl -s -o /dev/null -b admin.jar -c admin.jar -w '%{http_code}' -X POST "$WEB/logout")" = "303" ] && ! grep -q 'albums_token' admin.jar; }
+          check "POST /logout -> 303 and the cookie is expired" logout
+          catalog_selects() {
+            local b a
+            sleep 0.3; b=$(count_selects)
+            curl -s -o /dev/null "$WEB/catalog"
+            sleep 0.3; a=$(count_selects)
+            echo $((a - b))
+          }
+          QC=$(catalog_selects)
+          if [ "$QC" -ge 1 ] && [ "$QC" -le 5 ]; then
+            pass "GET /catalog costs $QC SELECTs: the page, its relations and one availability query"
+          else
+            fail "GET /catalog costs at most 5 SELECTs (no N+1 for the availability column)" "SELECTs=$QC"
+          fi
+          no_token_in_log() { ! grep -qE 'eyJ[A-Za-z0-9_-]{20,}\.' app.log; }
+          check "No token or cookie value in the server log" no_token_in_log
 
           if [ "$FAILED" != "0" ]; then echo "---- last server log lines ----"; tail -n 40 app.log; fi
           exit $FAILED

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Replays the API smoke test of .github/workflows/theme8-check.yml against a running
-# server, so the CI result can be reproduced locally before pushing.
+# Replays the API and web UI smoke test of .github/workflows/theme8-check.yml against a
+# running server, so the CI result can be reproduced locally before pushing.
 #
 # Usage: scripts/smoke.sh [BASE_URL]            (default http://localhost:8080)
 #   SQL_LOG_CMD  command that prints the server log; its SELECT lines are counted for
@@ -15,7 +15,8 @@ BASE="$BASE_URL/api/v1"
 SQL_LOG_CMD=${SQL_LOG_CMD:-"docker compose logs --no-log-prefix api"}
 TAG=$(date +%s)
 RESP=$(mktemp)
-trap 'rm -f "$RESP"' EXIT
+JARS=$(mktemp -d)
+trap 'rm -rf "$RESP" "$RESP.h" "$JARS"' EXIT
 FAILED=0
 
 pass() { echo "PASS: $1"; }
@@ -186,6 +187,68 @@ fi
 http "DELETE /albums/{id} -> 204" 204 DELETE "/albums/$ALBUM"
 http "GET deleted album -> 404" 404 GET "/albums/$ALBUM"
 http "DELETE /albums/{unknown} -> 404" 404 DELETE /albums/999999
+
+# --- Lesson 10: the web UI (html/template + htmx) behind the cookie session ------------
+PAGE="$JARS/page.html"; HDR="$JARS/page.h"
+page() { curl -s -o "$PAGE" -D "$HDR" -w '%{http_code}' "$@"; } # status to stdout, body and headers to files
+[ "$(page "$BASE_URL/catalog")" = "200" ] && grep -qi '^content-type: text/html; charset=utf-8' "$HDR" \
+  && grep -q '<!doctype html>' "$PAGE" && grep -q 'id="album-list"' "$PAGE" && grep -q 'hx-get="/web/albums"' "$PAGE" \
+  && grep -q 'src="/static/htmx.min.js"' "$PAGE" && ! grep -q 'hx-delete' "$PAGE" \
+  && pass "GET /catalog renders the layout and the search form without delete buttons for a visitor" \
+  || fail "GET /catalog renders the layout and the search form without delete buttons for a visitor"
+[ "$(page "$BASE_URL/static/app.css")" = "200" ] && grep -qi '^content-type: text/css' "$HDR" \
+  && pass "GET /static/app.css is served from the binary" || fail "GET /static/app.css is served from the binary"
+[ "$(page "$BASE_URL/static/htmx.min.js")" = "200" ] && grep -qi '^content-type: text/javascript' "$HDR" && grep -q 'version:"2.0.11"' "$PAGE" \
+  && pass "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)" || fail "GET /static/htmx.min.js is served from the binary (htmx 2.0.11)"
+[ "$(page "$BASE_URL/static/")" = "404" ] && [ "$(page "$BASE_URL/static/missing.css")" = "404" ] \
+  && pass "No directory listing and a 404 for a missing asset" || fail "No directory listing and a 404 for a missing asset"
+http "POST /albums creates the album the web checks search for and delete" 201 POST /albums "{\"title\":\"Web Delete $TAG\",\"label\":\"Smoke Label\",\"genre_id\":$GEN,\"artist_ids\":[$ART1]}"
+WEB_ALBUM=$(field "" '["id"]')
+[ "$(page -H 'HX-Request: true' "$BASE_URL/web/albums?q=Web+Delete+$TAG")" = "200" ] && [ "$(tr -d '[:space:]' < "$PAGE" | head -c 3)" = "<tr" ] \
+  && grep -q "Web Delete $TAG" "$PAGE" && ! grep -qi '<html' "$PAGE" \
+  && pass "HX-Request GET /web/albums?q= answers the matching rows only" || fail "HX-Request GET /web/albums?q= answers the matching rows only"
+[ "$(page "$BASE_URL/web/albums?q=blue")" = "303" ] && grep -qi '^location: /catalog?q=blue' "$HDR" \
+  && pass "A plain GET /web/albums redirects to /catalog?q=" || fail "A plain GET /web/albums redirects to /catalog?q="
+[ "$(page -X DELETE "$BASE_URL/web/albums/$WEB_ALBUM")" = "401" ] && grep -q '"unauthenticated"' "$PAGE" \
+  && pass "Anonymous DELETE /web/albums/{id} -> 401" || fail "Anonymous DELETE /web/albums/{id} -> 401"
+web_login() { curl -s -o /dev/null -c "$1" -w '%{http_code}' -X POST "$BASE_URL/login" --data-urlencode "email=$2" --data-urlencode "password=$3"; }
+[ "$(web_login "$JARS/admin.jar" "$ADMIN_EMAIL" "$ADMIN_PASSWORD")" = "303" ] && grep -q '^#HttpOnly_' "$JARS/admin.jar" && grep -q 'albums_token' "$JARS/admin.jar" \
+  && pass "POST /login as admin -> 303 with an HttpOnly albums_token cookie" || fail "POST /login as admin -> 303 with an HttpOnly albums_token cookie"
+[ "$(web_login "$JARS/bad.jar" "$ADMIN_EMAIL" wrong-password)" = "401" ] && ! grep -qs 'albums_token' "$JARS/bad.jar" \
+  && pass "POST /login with a wrong password -> 401 and no cookie" || fail "POST /login with a wrong password -> 401 and no cookie"
+[ "$(page -b "$JARS/admin.jar" "$BASE_URL/catalog")" = "200" ] && grep -q "$ADMIN_EMAIL (admin)" "$PAGE" && grep -q 'hx-delete="/web/albums/' "$PAGE" && grep -q 'action="/logout"' "$PAGE" \
+  && pass "GET /catalog with the admin cookie shows the account and the delete buttons" || fail "GET /catalog with the admin cookie shows the account and the delete buttons"
+WEB_MEMBER="web-member-$TAG@albums.local"
+http "Register a member for the web checks" 201 POST /auth/register "{\"email\":\"$WEB_MEMBER\",\"password\":\"$ADMIN_PASSWORD\"}"
+[ "$(web_login "$JARS/member.jar" "$WEB_MEMBER" "$ADMIN_PASSWORD")" = "303" ] \
+  && pass "POST /login as a member -> 303" || fail "POST /login as a member -> 303"
+[ "$(page -b "$JARS/member.jar" -X DELETE "$BASE_URL/web/albums/$WEB_ALBUM")" = "403" ] && grep -q '"forbidden"' "$PAGE" \
+  && pass "Member DELETE /web/albums/{id} -> 403" || fail "Member DELETE /web/albums/{id} -> 403"
+[ "$(page -H "Authorization: Bearer $AUTH_TOKEN" -X DELETE "$BASE_URL/web/albums/$WEB_ALBUM")" = "401" ] \
+  && pass "A bearer token is not a web session: DELETE /web/albums/{id} -> 401" || fail "A bearer token is not a web session: DELETE /web/albums/{id} -> 401"
+[ "$(page -b "$JARS/admin.jar" -H 'Sec-Fetch-Site: cross-site' -X DELETE "$BASE_URL/web/albums/$WEB_ALBUM")" = "403" ] && grep -q 'cross-origin' "$PAGE" \
+  && pass "Cross-site DELETE with a valid cookie -> 403 (CrossOriginProtection)" || fail "Cross-site DELETE with a valid cookie -> 403 (CrossOriginProtection)"
+http "The album survived the rejected deletes" 200 GET "/albums/$WEB_ALBUM"
+[ "$(page -b "$JARS/admin.jar" -X DELETE "$BASE_URL/web/albums/$WEB_ALBUM")" = "200" ] && [ ! -s "$PAGE" ] \
+  && pass "Admin DELETE /web/albums/{id} -> empty 200 (htmx swaps the row away)" || fail "Admin DELETE /web/albums/{id} -> empty 200 (htmx swaps the row away)"
+http "The deleted album is gone from the API" 404 GET "/albums/$WEB_ALBUM"
+[ "$(page -H 'HX-Request: true' "$BASE_URL/web/albums?q=Web+Delete+$TAG")" = "200" ] && grep -q 'class="empty"' "$PAGE" \
+  && pass "The fragment no longer lists the deleted album" || fail "The fragment no longer lists the deleted album"
+[ "$(curl -s -o /dev/null -b "$JARS/admin.jar" -c "$JARS/admin.jar" -w '%{http_code}' -X POST "$BASE_URL/logout")" = "303" ] && ! grep -q 'albums_token' "$JARS/admin.jar" \
+  && pass "POST /logout -> 303 and the cookie is expired" || fail "POST /logout -> 303 and the cookie is expired"
+catalog_selects() {
+  local b a
+  sleep 0.3; b=$(count_selects)
+  curl -s -o /dev/null "$BASE_URL/catalog"
+  sleep 0.3; a=$(count_selects)
+  echo $((a - b))
+}
+QC=$(catalog_selects)
+if [ "$QC" -ge 1 ] && [ "$QC" -le 5 ]; then
+  pass "GET /catalog costs $QC SELECTs: the page, its relations and one availability query"
+else
+  fail "GET /catalog costs at most 5 SELECTs (no N+1 for the availability column)" "SELECTs=$QC"
+fi
 
 echo "== done: $([ "$FAILED" = 0 ] && echo 'all checks passed' || echo 'some checks FAILED')"
 exit $FAILED

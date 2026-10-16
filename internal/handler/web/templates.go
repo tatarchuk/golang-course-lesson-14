@@ -17,7 +17,8 @@ const (
 // views holds the parsed template sets. The base set (layout and partials) renders the
 // fragments; every page is a clone of the base with its own "title" and "content"
 // blocks parsed on top, so pages override the layout's blocks without clobbering each
-// other. Everything is html/template: contextual autoescaping, no template.HTML anywhere.
+// other. Everything is html/template with contextual autoescaping; nothing is ever marked
+// as safe HTML, so user and database text stays text.
 type views struct {
 	base  *template.Template
 	pages map[string]*template.Template
