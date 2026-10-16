@@ -116,10 +116,11 @@ func (f *fakeArtists) List(context.Context) ([]model.Artist, error) {
 }
 
 type fakeCopies struct {
-	t            *testing.T
-	create       func(int64, model.CopyInput) (model.Copy, error)
-	listByAlbum  func(int64) ([]model.Copy, error)
-	availability func(int64) (model.Availability, error)
+	t                     *testing.T
+	create                func(int64, model.CopyInput) (model.Copy, error)
+	listByAlbum           func(int64) ([]model.Copy, error)
+	availability          func(int64) (model.Availability, error)
+	availabilityForAlbums func([]int64) (map[int64]model.Availability, error)
 }
 
 func (f *fakeCopies) Create(_ context.Context, albumID int64, in model.CopyInput) (model.Copy, error) {
@@ -141,6 +142,13 @@ func (f *fakeCopies) Availability(_ context.Context, albumID int64) (model.Avail
 		f.t.Fatal("unexpected Availability call")
 	}
 	return f.availability(albumID)
+}
+
+func (f *fakeCopies) AvailabilityForAlbums(_ context.Context, albumIDs []int64) (map[int64]model.Availability, error) {
+	if f.availabilityForAlbums == nil {
+		f.t.Fatal("unexpected AvailabilityForAlbums call")
+	}
+	return f.availabilityForAlbums(albumIDs)
 }
 
 // serve routes one request through a mux registered by the caller, so handlers see

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -15,10 +16,11 @@ import (
 // modelAlbum is a local alias so helper files can refer to the album model briefly.
 type modelAlbum = model.Album
 
-// ListOptions carries the filter and the page requested by the client.
-// The handler validates them first: Page >= 1, 1 <= Limit <= 100.
+// ListOptions carries the filters and the page requested by the client.
+// The handler validates the page first: Page >= 1, 1 <= Limit <= 100.
 type ListOptions struct {
-	GenreID int64 // 0 means "no filter"
+	GenreID int64  // 0 means "no filter"
+	Query   string // case-insensitive fragment of the title or of an artist name; blank means "no filter"
 	Page    int
 	Limit   int
 }
@@ -70,7 +72,8 @@ func (r *gormAlbumRepository) Get(ctx context.Context, id int64) (model.Album, e
 	return album, translate(err)
 }
 
-// List returns one page of albums ordered by id, optionally filtered by genre.
+// List returns one page of albums ordered by id, optionally filtered by genre and by
+// a search query that matches the title or an artist name, case-insensitively.
 func (r *gormAlbumRepository) List(ctx context.Context, opts ListOptions) ([]model.Album, error) {
 	albums := make([]model.Album, 0) // non-nil, so an empty result encodes as []
 	page, limit := sanitizePage(opts.Page, opts.Limit)
@@ -85,6 +88,13 @@ func (r *gormAlbumRepository) List(ctx context.Context, opts ListOptions) ([]mod
 	q := r.db.WithContext(ctx).Preload("Artists").Preload("Genre").Order("id")
 	if opts.GenreID > 0 {
 		q = q.Where("genre_id = ?", opts.GenreID)
+	}
+	if pattern, ok := likePattern(opts.Query); ok {
+		// The artist match is a correlated EXISTS inside the same statement: no join, so
+		// an album with several matching artists is still one row, and no extra query.
+		q = q.Where(`(albums.title ILIKE ? ESCAPE '\' OR EXISTS (`+
+			`SELECT 1 FROM album_artists aa JOIN artists ar ON ar.id = aa.artist_id `+
+			`WHERE aa.album_id = albums.id AND ar.name ILIKE ? ESCAPE '\'))`, pattern, pattern)
 	}
 	if err := q.Offset((page - 1) * limit).Limit(limit).Find(&albums).Error; err != nil {
 		return nil, translate(err)
@@ -221,4 +231,16 @@ func sanitizePage(page, limit int) (int, int) {
 		limit = 10
 	}
 	return page, limit
+}
+
+// likePattern turns a search query into a case-insensitive LIKE pattern and reports
+// false for a blank query. LIKE's own metacharacters in the query are escaped, so a
+// user typing "%" looks for a percent sign rather than for every album.
+func likePattern(query string) (string, bool) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "", false
+	}
+	escaped := strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(query)
+	return "%" + escaped + "%", true
 }
