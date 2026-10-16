@@ -10,7 +10,7 @@ import (
 	"homework/internal/testdb"
 )
 
-// TestOpenLogsSQLWithoutValues pins the fix for security_audit.md finding 1: at Info level
+// TestOpenLogsSQLWithoutValues pins the fix for docs/auth/audit-raw.md finding 1: at Info level
 // the GORM logger prints every statement, so it must print placeholders instead of bound
 // values, or a bcrypt hash and an e-mail would land in the server log on every registration.
 func TestOpenLogsSQLWithoutValues(t *testing.T) {

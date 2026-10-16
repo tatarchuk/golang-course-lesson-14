@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestValidateSecret pins security_audit.md finding 4: an empty, short or template secret
+// TestValidateSecret pins docs/auth/audit-raw.md finding 4: an empty, short or template secret
 // must stop the server before anything is signed with it.
 func TestValidateSecret(t *testing.T) {
 	cases := map[string]bool{

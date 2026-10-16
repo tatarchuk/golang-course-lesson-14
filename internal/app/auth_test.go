@@ -14,8 +14,7 @@ import (
 
 // Lesson 9 acceptance tests for authentication: registration, login, token checks
 // and the CORS preflight. They run against the real router and database, like the
-// rest of this package, and stay red until the auth routes exist (see
-// albums_lesson9_homework.md, "What the tests check").
+// rest of this package.
 //
 // Error codes on top of the Theme 8 contract:
 //
