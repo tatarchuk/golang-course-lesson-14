@@ -38,6 +38,12 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 	WriteJSON(w, status, ErrorResponse{Error: ErrorDetail{Code: code, Message: message}})
 }
 
+// WriteRepoError is writeRepoError for handlers outside this package, so the web UI maps
+// storage errors to the same statuses and envelope as the API.
+func WriteRepoError(w http.ResponseWriter, err error, resource string) {
+	writeRepoError(w, err, resource)
+}
+
 // writeRepoError maps a repository or validation error to the HTTP response.
 // resource names the entity in messages ("Album", "Genre", ...). Unknown errors are
 // logged in full and answered with a generic 500: internal details never reach the client.

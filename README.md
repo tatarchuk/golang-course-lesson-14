@@ -46,7 +46,7 @@ curl -s localhost:8080/health                      # {"status":"ok"}
 curl -s 'localhost:8080/api/v1/albums?limit=2'     # каталог читається без токена
 curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"admin@albums.local","password":"Albums-Dev-2026"}'   # {"token":"<jwt>"}
-open http://localhost:8080/catalog                 # TODO: вебкаталог з'являється після кроку 4 плану; вхід: /login
+open http://localhost:8080/catalog                 # вебкаталог із живим пошуком; вхід через /login (адміністратор із кроку 4)
 docker compose logs -f api                         # кожен SQL-запит потрапляє в лог (без значень)
 docker compose down                                # зупинити; дані лишаються у volume pgdata
 ```
@@ -120,11 +120,14 @@ scripts/smoke.sh http://localhost:8080        # повтор API smoke-тест�
   відсутні в результаті, порожній список id не торкається бази).
 - `internal/handler`: обробники з фейковими репозиторіями: порядок перевірок, коди помилок, парсинг;
   реєстрація, логін (однакове тіло `401` для всіх невдач, одне bcrypt-порівняння завжди), `GET /me`,
-  список акаунтів і зміна ролі.
+  список акаунтів і зміна ролі; Тема 10: `Authenticate` (нормалізація e-mail, та сама помилка для невідомого
+  e-mail, хибного пароля й акаунта без пароля; помилка сховища не маскується).
   <!-- TODO (крок 5): + internal/handler/web: сторінка каталогу, фрагмент рядків, матриця доступу на видаленні, логін/логаут з cookie. -->
 - `internal/middleware`: паніка → 500, CORS (з `Authorization`), логування, `Auth` (сім видів хибних
   облікових даних → `401`), `RequireRole` (`401`/`403`).
-  <!-- TODO (крок 4): + CookieAuth: валідна cookie кладе claims у контекст, відсутня чи хибна - анонімний запит; заголовок Authorization ігнорується. -->
+  Тема 10: `CookieAuth` (валідна cookie кладе claims у контекст; відсутня, прострочена, з іншим секретом
+  чи під іншим ім'ям — анонімний запит без відповіді-помилки; заголовок `Authorization` ігнорується) і
+  пара `CookieAuth` + `RequireRole` (`401`/`403`/прохід із кодами API).
 - `internal/app`: e2e через `NewRouter()` і реальну БД: сценарій smoke-тесту CI, граничні випадки
   контракту Теми 7, приймальні тести Теми 9 (`auth_test.go`, `rbac_test.go`) і Теми 10 (`web_test.go`:
   `TestWebCatalogPage`, `TestWebAlbumRowsFragment`, `TestWebDeleteRow`, `TestWebLoginAndLogout`,
@@ -161,7 +164,6 @@ API `/api/v1`.
 
 ## Вебінтерфейс (Тема 10)
 
-<!-- TODO (крок 4): звірити з реалізацією; до того цей розділ описує контракт із albums_lesson10_homework.md. -->
 Сторінки рендеряться на сервері з шаблонів `html/template` (`web/templates/`), інтерактивність дає
 HTMX (`web/static/htmx.min.js`, зафіксована версія 2.x) без власного JavaScript. Каталог публічний, як і
 `GET /api/v1/albums`; кнопки видалення бачать лише `staff` та `admin` після входу через `/login`.
@@ -184,7 +186,9 @@ hx-swap="outerHTML" hx-confirm="Delete this album?"`. Обробник вида�
 Cookie сесії `albums_token` містить той самий HS256 JWT, що й API, з атрибутами `Path=/`, `Max-Age=86400`,
 `HttpOnly`, `SameSite=Lax` і `Secure`, коли `COOKIE_SECURE=true`. API її не приймає (лише
 `Authorization: Bearer`), а вебмаршрути не приймають заголовок: дві поверхні аутентифікації не
-перетинаються. Докладніше в розділі [Частина 1](#частина-1-архітектура-вебшару-та-аудит-автоекранування).
+перетинаються. Крос-сайтовий запит на будь-який вебмаршрут зі зміною стану відхиляє
+`http.CrossOriginProtection` (перевірка `Sec-Fetch-Site`/`Origin`, Go 1.25) з тим самим конвертом `403`
+`forbidden`. Докладніше в розділі [Частина 1](#частина-1-архітектура-вебшару-та-аудит-автоекранування).
 
 ## API
 
@@ -366,12 +370,13 @@ Dev-пароль `Albums-Dev-2026` задокументовано тут і в `
 ```
 cmd/api/main.go                      конфігурація з env (JWT_SECRET читається один раз, порожній -> fail fast), вбудовані міграції або MIGRATIONS_PATH, app.Config з Templates/Static/CookieSecure, HTTP-сервер, graceful shutdown
 cmd/bootstrap/main.go                створення або скидання адміністратора: bcrypt-хеш + upsert з роллю admin
-internal/app/app.go                  NewRouter(repos, cfg): маршрути за групами public / protected / staff / admin -> ServeMux -> Logging(Recover(CORS))
+internal/app/app.go                  NewRouter(repos, cfg): групи public / protected / staff / admin + вебгрупа (cookie, CrossOriginProtection, /static/) -> ServeMux -> Logging(Recover(CORS))
 internal/auth/                       bcrypt-хешування (DummyHash для невідомих акаунтів), видача та перевірка HS256 JWT, користувач у контексті запиту
 internal/model/                      GORM-моделі Album, Artist, Genre, Copy, User (PasswordHash json:"-"), AlbumArtist + вхідні структури з Validate()
 internal/repository/                 інтерфейси та GORM-реалізації, errors.go, db.go (Open), migrate.go (MigrateFS для вбудованого набору, Migrate для теки)
-internal/handler/                    HTTP-обробники API (*_handler.go), errors.go (коди, відображення помилок), парсинг
-internal/middleware/                 Logging, Recover, CORS (+ Authorization), Auth, RequireRole
+internal/handler/                    HTTP-обробники API (*_handler.go), authenticate.go (спільна перевірка облікових даних), errors.go, парсинг (+ PathID, WriteRepoError для вебшару)
+internal/handler/web/                вебінтерфейс: Catalog, Rows (фрагмент для HX-Request), Delete (порожній 200), LoginForm/Login/Logout (cookie albums_token), StaticFiles; шаблони розбираються раз, клон на сторінку
+internal/middleware/                 Logging, Recover, CORS (+ Authorization), Auth, RequireRole, CookieAuth (сесія вебінтерфейсу)
 internal/testdb/                     спільне підключення для тестів із БД (advisory lock, вбудовані міграції, TRUNCATE)
 migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down) + embed.go: SQL-файли вбудовані в бінарник
 web/                                 вбудовані файли вебінтерфейсу (go:embed): templates.go, static.go, templates/ (layout, catalog, login, partials/album_row*), static/ (app.css, htmx.min.js 2.0.11)
@@ -384,7 +389,6 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 .github/workflows/theme8-check.yml   CI: структура, міграції, тести, smoke-тест з аутентифікацією
 ```
 
-<!-- TODO (крок 4): додати до переліку internal/handler/web/, internal/middleware/cookie.go, internal/handler/authenticate.go. -->
 
 Рішення Теми 8, які лишаються в силі:
 
@@ -449,7 +453,7 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 | Частина | Що потрібно | Стан |
 |---|---|---|
 | 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | <!-- TODO --> у роботі |
-| 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | промпти складено (крок 1), виконання <!-- TODO --> |
+| 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | готово: промпти складено до генерації (крок 1), виконано у кроках 3 і 4 |
 | 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 <!-- TODO --> |
 
 ### Частина 1. Архітектура вебшару та аудит автоекранування
@@ -508,7 +512,16 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/h
 екрануванням, `AvailabilityForAlbums` одним запитом, винесення перевірки облікових даних у
 `handler.Authenticate`, `CookieAuth`, пакет `internal/handler/web` (сторінка, фрагмент за `HX-Request`,
 видалення з порожнім `200`, логін/логаут з атрибутами cookie) і реєстрацію вебгрупи в `app.go` під
-`http.CrossOriginProtection`. <!-- TODO (крок 4): аналіз результату. -->
+`http.CrossOriginProtection`. Результат: частину 1 (репозиторії) виконано кроком 2 ще до шаблонів, решту — кроком 4; обидві частини
+test-first (`internal/repository/catalog_search_test.go`, `internal/middleware/cookie_test.go`,
+`internal/handler/authenticate_test.go` написано до коду). Згенеровано `internal/handler/authenticate.go`
+(`Authenticate` + `ErrInvalidCredentials`; `AuthHandler.Login` тепер викликає його, відповіді й тести часу
+без змін), `internal/middleware/cookie.go`, пакет `internal/handler/web` і вебгрупу в `app.go` під
+`http.CrossOriginProtection` з JSON-конвертом `403`. Ручні відхилення від промпту: `StaticFiles` відповідає
+JSON `404` і для відсутнього файлу, не лише для теки; фрагмент рядків визначає відвідувача тим самим
+пошуком акаунта, що й сторінка (cookie видаленого акаунта рендериться анонімно скрізь); `GET /login` теж
+за `CookieAuth`, щоб залогінений бачив свій акаунт у шапці. Приймальні тести Теми 10 позеленіли з першого
+запуску після реалізації.
 
 ### Частина 3. go:embed і тести
 

@@ -60,10 +60,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, user)
 }
 
-// Login handles POST /api/v1/auth/login. Every failure takes the same path: the
-// password is always compared with bcrypt (against DummyHash when the account is
-// unknown or has no password yet) and the answer is the same 401 body, so neither
-// the response nor its timing reveals which e-mails are registered.
+// Login handles POST /api/v1/auth/login. Every failure takes the same path through
+// Authenticate: the password is always compared with bcrypt (against DummyHash when
+// the account is unknown or has no password yet) and the answer is the same 401 body,
+// so neither the response nor its timing reveals which e-mails are registered. The web
+// UI's login form (internal/handler/web) shares that check.
 //
 // @Summary  Log in and receive a 24-hour bearer token
 // @Tags     auth
@@ -79,21 +80,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if !readInput(w, r, &in) {
 		return
 	}
-	user, err := h.users.GetByEmail(r.Context(), model.NormalizeEmail(in.Email))
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		writeRepoError(w, err, "User")
+	user, err := Authenticate(r.Context(), h.users, in.Email, in.Password)
+	if errors.Is(err, ErrInvalidCredentials) {
+		WriteError(w, http.StatusUnauthorized, CodeUnauthenticated, msgInvalidCredentials)
 		return
 	}
-	// An unknown e-mail or an account that never got a password (empty hash, e.g. a
-	// seed row before cmd/bootstrap) is compared against DummyHash: bcrypt would reject
-	// an empty hash instantly and the timing difference would reveal the account.
-	known := err == nil && user.PasswordHash != ""
-	hash := auth.DummyHash
-	if known {
-		hash = user.PasswordHash
-	}
-	if !auth.CheckPassword(hash, in.Password) || !known {
-		WriteError(w, http.StatusUnauthorized, CodeUnauthenticated, msgInvalidCredentials)
+	if err != nil {
+		writeRepoError(w, err, "User")
 		return
 	}
 	token, err := auth.IssueToken(h.secret, user.ID, user.Role, auth.TokenTTL)

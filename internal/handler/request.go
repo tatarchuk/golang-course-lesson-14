@@ -96,6 +96,12 @@ func readInput(w http.ResponseWriter, r *http.Request, dst validator) bool {
 }
 
 // pathID parses the {id} path value. On failure it writes the 400 response and returns false.
+// PathID is pathID for handlers outside this package, such as the web UI: it parses the
+// {id} path value and answers 400 invalid_id itself when the value is not a valid id.
+func PathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	return pathID(w, r)
+}
+
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, ok := parseID(r.PathValue("id"))
 	if !ok {

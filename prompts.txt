@@ -286,6 +286,29 @@ Generate:
 Do not add tests (they are written separately: internal/app/web_test.go exists and is red, and
 internal/handler/web/catalog_test.go comes from prompt 3.2). Output each new or changed file completely.
 
+--- Result / manual edits (2.2) ---
+Executed in two steps, test-first. The repository part (item 1) ran as Step 2 of the plan, before the
+templates and the embedding: ListOptions.Query with ILIKE ... ESCAPE '\' on the title and a correlated
+EXISTS over album_artists/artists in the same statement (List keeps its SELECT count),
+CopyRepository.AvailabilityForAlbums as one GROUP BY, the fake in internal/handler/fakes_test.go; tests in
+internal/repository/catalog_search_test.go. Items 2-5 ran as Step 4: internal/handler/authenticate.go
+(Authenticate + ErrInvalidCredentials; AuthHandler.Login now calls it, its responses are unchanged and
+the timing tests of TestAuthHandlerLogin still pass), the exported handler.PathID and
+handler.WriteRepoError wrappers, internal/middleware/cookie.go (CookieAuth identifies and never refuses;
+the Authorization header is ignored), internal/handler/web (doc.go; handler.go with CookieName and
+pageLimit 50; templates.go parsing the base set once and one clone per page, rendering into a buffer;
+view.go with pageData, userView, albumRow and the two-call rows() loader; catalog.go; auth.go;
+static.go) and the web group in internal/app/app.go behind http.NewCrossOriginProtection() with a JSON
+403 deny handler. Manual deviations from the prompt: the static handler is webhandler.StaticFiles and
+answers the JSON 404 for a missing file as well as for a directory path; the rows fragment resolves the
+visitor through the same account lookup as the page, so the cookie of a deleted account renders
+anonymously in both; GET /login also runs behind CookieAuth so a signed-in visitor sees the user box
+there. Unit tests written before the code: internal/middleware/cookie_test.go (seven cookie cases and
+the CookieAuth + RequireRole pair) and internal/handler/authenticate_test.go. Verified: go test
+./internal/middleware ./internal/handler/..., then the Lesson 10 acceptance tests
+(go test ./internal/app/ -run Web -v) went green on the first run after the implementation, and
+go test ./... -race is green.
+
 === Prompt 3.2: HTML/HTMX handler tests with fakes (internal/handler/web/catalog_test.go) ===
 
 Write table-driven tests for the package `internal/handler/web` (package `web`, the same package as the
