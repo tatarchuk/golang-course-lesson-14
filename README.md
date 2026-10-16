@@ -1,9 +1,3 @@
-<!--
-Чернетка README Теми 10 (крок 1 плану). Правила:
-1. Усе без позначки TODO вже правдиве для коду Теми 9 або зафіксоване умовою albums_lesson10_homework.md.
-2. Кожну позначку TODO (HTML-коментар у тексті, "# TODO" у прикладах команд) заповніть або видаліть після
-   реалізації відповідного кроку. Перевірка перед здачею: grep -n TODO README.md (має бути порожньо).
--->
 # Albums API
 
 REST-сервіс обліку музичних альбомів на Go з PostgreSQL і вебінтерфейсом на `html/template` та HTMX.
@@ -168,7 +162,9 @@ cookie jar, матриця видалення (анонім `401`, member `403`,
 порожній `200`, альбом зникає з API і з фрагмента), логаут прострочує cookie, сторінки несуть `Content-Security-Policy`,
 `X-Frame-Options` і `nosniff`, статика кешується, анонімний `GET /catalog` коштує не більше 5 `SELECT`, у лозі
 сервера немає токенів. Локальний повтор: `scripts/smoke.sh` дає 102/102
-([docs/web/smoke.txt](docs/web/smoke.txt)). <!-- TODO (крок 7): посилання на зелений запуск CI. -->
+([docs/web/smoke.txt](docs/web/smoke.txt)). Workflow запускається на кожен push і pull request; зелений запуск для
+цього коду (обидві джоби, Static checks та Migrations, tests, API smoke test):
+<https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/38913600126>.
 
 ### Документація API
 
