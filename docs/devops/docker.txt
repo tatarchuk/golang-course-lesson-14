@@ -1,0 +1,20 @@
+# Lesson 10 extra part (DevOps), Task 3: Docker Engine in the VM (2026-10-20). Every command is printed before its output.
+# Installed by the Vagrant provisioner deploy/vagrant/docker-engine.sh from Docker's apt repository. Before it ran,
+# 'vagrant ssh -c docker --version' printed 'bash: line 1: docker: command not found'. The provisioner below is
+# the second run: it is idempotent and only reports what is installed.
+
+$ vagrant provision --provision-with docker-engine | grep -E 'Running provisioner|already installed'
+==> default: Running provisioner: docker-engine (shell)...
+    default: docker already installed: Docker version 29.9.1, build dfc520d
+$ vagrant ssh -c "docker version --format '{{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}'"
+29.9.1 linux/arm64
+$ vagrant ssh -c 'docker compose version'
+Docker Compose version v5.6.0
+$ vagrant ssh -c 'id -nG'
+vagrant adm cdrom sudo dip plugdev lxd docker
+$ vagrant ssh -c 'jq --version'
+jq-1.7
+$ vagrant ssh -c 'docker run --rm hello-world | head -3'
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.

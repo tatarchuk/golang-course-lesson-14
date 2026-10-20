@@ -29,6 +29,7 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder ".", "/app"
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  # Provisioners (idempotent shell scripts under deploy/vagrant/) are added task by task:
-  # docker-engine, floci, aws-tools, k3s.
+  # Provisioners: idempotent setup scripts that run on the first `vagrant up` and on
+  # `vagrant provision [--provision-with NAME]` (slides 5 and 7).
+  config.vm.provision "docker-engine", type: "shell", path: "deploy/vagrant/docker-engine.sh"
 end
