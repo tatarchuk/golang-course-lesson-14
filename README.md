@@ -10,6 +10,9 @@ N+1; Тема 9 захистила API: реєстрація і логін з `b
 
 Умова Теми 10, адаптована під варіант `albums`: [albums_lesson10_homework.md](albums_lesson10_homework.md).
 Звіт про виконання: розділ [Lesson 10 Report](#lesson-10-report-full-stack-go-з-htmx-та-goembed).
+Додаткова частина Теми 10 — DevOps Basics (віртуальна машина з Docker, Floci і k3s, демо з презентації,
+Docker Compose, Kubernetes): умова [albums_lesson10_devops_homework.md](albums_lesson10_devops_homework.md),
+звіт — розділ [Lesson 10 — додаткова частина](#lesson-10--додаткова-частина-devops-basics-vm-docker-floci-k3s).
 Матеріали Теми 9 (умова, промпти, звіт аудиту) лишилися в репозиторії попередньої теми
 (<https://github.com/tatarchuk/golang-course-lesson-9>); її докази збережено тут у [docs/auth/](docs/auth/).
 
@@ -404,11 +407,16 @@ internal/middleware/                 Logging, Recover, CORS (+ Authorization), A
 internal/testdb/                     спільне підключення для тестів із БД (advisory lock, вбудовані міграції, TRUNCATE)
 migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down) + embed.go: SQL-файли вбудовані в бінарник
 web/                                 вбудовані файли вебінтерфейсу (go:embed): templates.go, static.go, templates/ (layout, catalog, login, partials/album_row*), static/ (app.css, htmx.min.js 2.0.11)
-docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10)
+docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10), docs/devops/ (додаткова частина Теми 10)
 scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI: API з логіном + вебінтерфейс із cookie jar), measure_n1.sh (N+1), render_er.sh
 Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) без теки migrations/ і стек postgres + api (JWT_SECRET обов'язковий, COOKIE_SECURE)
 Makefile, .env.example               щоденні команди (+ bootstrap, build) та приклад конфігурації (COOKIE_SECURE; MIGRATIONS_PATH закоментовано)
 albums_lesson10_homework.md          умова Теми 10, адаптована під варіант albums
+albums_lesson10_devops_homework.md   умова додаткової частини Теми 10 (DevOps Basics), UA + EN
+Vagrantfile                          VM для додаткової частини: Ubuntu 24.04 arm64 (VirtualBox), порти на 127.0.0.1, репозиторій у /app, провізіонери docker-engine, floci, aws-tools, k3s
+deploy/vagrant/                      провізіонери (Docker Engine, AWS CLI + awslocal, k3s), env-status.sh, обхід перевірки портів Vagrant на macOS 27 (port_check_fix.rb + тест)
+deploy/floci/                        Floci (compose.floci.yaml), Demo 1 (demo1-ec2.sh), Demo 2 (demo2-lambda.sh; lambda/ — окремий Go-модуль із тестами)
+deploy/k8s/                          k3s: PostgreSQL (StatefulSet), API (Deployment, NodePort), Ingress (Traefik), bootstrap Job, create-secrets.sh
 prompts.txt                          промпти завдань 2.1, 2.2, 3.1, 3.2 з нотатками про результат
 .github/workflows/theme8-check.yml   CI «Theme 8 + 9 + 10»: структура й статичні правила (html/template, go:embed, cookie), міграції, тести, статичний бінарник з порожньої теки, API + веб smoke-тест
 ```
@@ -495,6 +503,7 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
 | 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | готово (крок 7): розділи нижче, [docs/web/template-audit.txt](docs/web/template-audit.txt), [docs/web/isolation.txt](docs/web/isolation.txt), скриншоти |
 | 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | готово: промпти складено до генерації (крок 1), виконано у кроках 3 і 4 |
 | 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 тести на фейках готово (крок 5) |
+| Додаткова частина: DevOps | VM з Docker, Floci і перевіреним k3s; Demo 1 і 2 з презентації; Compose із базою даних; Kubernetes | готово: розділ [Lesson 10 — додаткова частина](#lesson-10--додаткова-частина-devops-basics-vm-docker-floci-k3s) |
 
 ### Частина 1. Архітектура вебшару та аудит автоекранування
 
@@ -685,3 +694,153 @@ ok  	homework/web	1.388s
 Після виправлень: `go test ./... -race` зелений (127 тестів верхнього рівня, 168 підтестів,
 [docs/web/tests-after.txt](docs/web/tests-after.txt)), `scripts/smoke.sh` 102/102
 ([docs/web/smoke.txt](docs/web/smoke.txt)), докази в `docs/web/` перегенеровано тим самим скриптом.
+
+## Lesson 10 — додаткова частина: DevOps Basics (VM, Docker, Floci, k3s)
+
+Умова: [albums_lesson10_devops_homework.md](albums_lesson10_devops_homework.md), за презентацією «DevOps
+Basics for GenAI Developers». «Flossy» в умові — це Floci, локальний емулятор AWS (слайди 29–30);
+«демо для застосунків 1 і 2» — Demo 1 (EC2, слайд 32) і Demo 2 (Lambda на Go, слайди 33–36). Стан виконання:
+
+| Частина | Що потрібно | Стан |
+|---|---|---|
+| 1. Середовище (70) | віртуальна машина зі встановленим Docker, запущений Floci, перевірений k3s | готово: [Vagrantfile](Vagrantfile), [vm.txt](docs/devops/vm.txt), [docker.txt](docs/devops/docker.txt), [floci.txt](docs/devops/floci.txt), [k3s.txt](docs/devops/k3s.txt); скриншот [environment.png](docs/screenshots/devops/environment.png) |
+| 1. Демо (70) | Demo 1 і Demo 2 з презентації | готово: [demo1-ec2.txt](docs/devops/demo1-ec2.txt), [demo2-lambda.txt](docs/devops/demo2-lambda.txt); скриншоти [demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png) |
+| 2. Docker Compose (+30) | Go-застосунок у контейнері разом із базою даних у Docker Compose | готово: [Dockerfile](Dockerfile) і [docker-compose.yml](docker-compose.yml) запущено у VM, [compose.txt](docs/devops/compose.txt), smoke 102/102 ([smoke-compose.txt](docs/devops/smoke-compose.txt)); скриншоти [каталог](docs/screenshots/devops/devops-compose-catalog.png), [вхід](docs/screenshots/devops/devops-compose-login.png) |
+| 3. Kubernetes (**) | розгорнути застосунок у Kubernetes | готово: [deploy/k8s/](deploy/k8s/), [k8s.txt](docs/devops/k8s.txt), smoke 102/102 ([smoke-k8s.txt](docs/devops/smoke-k8s.txt)); скриншоти [k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png) |
+
+### Середовище
+
+Робоча машина — Mac на Apple Silicon (M2 Pro, 16 ГБ). Одна віртуальна машина під Vagrant 2.4.9 і
+VirtualBox 7.2.20 (box `bento/ubuntu-24.04` 202510.26.0, arm64, 4 vCPU, 6 ГБ) запускає все: Docker із
+застосунком у Compose і Floci, а поруч k3s зі своїм containerd. Репозиторій змонтовано у VM як `/app`
+(vboxsf, в обидва боки). Порти переадресовано лише на `127.0.0.1` Mac: 8080 (Compose), 30080 (NodePort
+k3s), 8081 → 80 (Traefik Ingress), 6443 (Kubernetes API). Усе встановлюють ідемпотентні провізіонери
+Vagrantfile; повторний `vagrant provision` нічого не змінює.
+
+| Компонент | Версія | Де | Перевірка |
+|---|---|---|---|
+| VM | Ubuntu 24.04.3 LTS, aarch64 | [Vagrantfile](Vagrantfile) | [vm.txt](docs/devops/vm.txt), скриншоти [vagrant_run.png](docs/screenshots/devops/vagrant_run.png), [vagrant-ubuntu.png](docs/screenshots/devops/vagrant-ubuntu.png), [virtualbox.png](docs/screenshots/devops/virtualbox.png) |
+| Docker Engine | 29.9.1, Compose v5.6.0 | [deploy/vagrant/docker-engine.sh](deploy/vagrant/docker-engine.sh) | [docker.txt](docs/devops/docker.txt) |
+| Floci | `floci/floci:2.3.0` | [deploy/floci/compose.floci.yaml](deploy/floci/compose.floci.yaml) | [floci.txt](docs/devops/floci.txt) |
+| AWS CLI, awslocal | 2.38.2, 0.22.2 | [deploy/vagrant/aws-tools.sh](deploy/vagrant/aws-tools.sh) | [demo1-ec2.txt](docs/devops/demo1-ec2.txt) |
+| k3s | v1.36.5+k3s1 | [deploy/vagrant/k3s.sh](deploy/vagrant/k3s.sh) | [k3s.txt](docs/devops/k3s.txt) |
+
+### Як відтворити
+
+```sh
+brew install --cask virtualbox vagrant             # потрібен пароль адміністратора macOS
+vagrant up                                         # VM + Docker + Floci + AWS CLI + k3s (усі провізіонери)
+vagrant ssh -c /app/deploy/vagrant/env-status.sh   # VM, контейнери, здоров'я Floci, вузол і поди k3s
+
+# Demo 1 і Demo 2 (Lambda збирається на Mac для linux/arm64)
+vagrant ssh -c /app/deploy/floci/demo1-ec2.sh
+(cd deploy/floci/lambda && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap . && zip function.zip bootstrap)
+vagrant ssh -c /app/deploy/floci/demo2-lambda.sh
+
+# Docker Compose у VM (JWT_SECRET береться з .env, див. «Швидкий запуск»)
+vagrant ssh -c 'docker compose -f /app/docker-compose.yml up -d --build'
+vagrant ssh -c 'docker compose -f /app/docker-compose.yml exec -T -e ADMIN_PASSWORD=Albums-Dev-2026 api /app/bootstrap -email admin@albums.local'
+open http://localhost:8080/catalog
+
+# Kubernetes (k3s): образ у k3s, секрети, маніфести, адміністратор
+vagrant ssh -c 'docker build -t albums-api:1.0 /app'
+vagrant ssh -c 'docker save --platform linux/arm64 -o /tmp/albums-api.tar albums-api:1.0'
+vagrant ssh -c 'sudo k3s ctr -n k8s.io images import /tmp/albums-api.tar'
+vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/namespace.yaml'
+vagrant ssh -c /app/deploy/k8s/create-secrets.sh
+vagrant ssh -c 'kubectl apply -k /app/deploy/k8s'
+vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml'
+open http://localhost:30080/catalog                # NodePort
+open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhost браузер веде на 127.0.0.1)
+```
+
+Після `vagrant halt` / `vagrant up` провізіонери не повторюються: Floci повертається сам
+(`restart: unless-stopped`), k3s — сервіс systemd, стек Compose піднімає
+`vagrant ssh -c 'docker compose -f /app/docker-compose.yml up -d'`.
+
+### Рішення
+
+- **arm64 скрізь.** VirtualBox на Apple Silicon запускає лише ARM-гостей, тому box arm64, а не
+  `ubuntu/jammy64` зі слайда 6 (лише amd64). Lambda збирається з `GOARCH=arm64` і створюється з
+  `--architectures arm64`: Floci запускає Lambda в контейнері з архітектурою хоста.
+- **Версії зафіксовано** (слайди 7, 15, 38, 46): box 202510.26.0, `floci/floci:2.3.0`, AWS CLI 2.38.2,
+  k3s v1.36.5+k3s1, образ `albums-api:1.0`; `latest` ніде не використовується.
+- **Floci 2.3.0 замість `hectorvent/floci:latest`.** Образ зі слайда 30 — заморожена збірка 1.5.5 того
+  самого проєкту (він переїхав у `floci-io/floci`); 1.5.5 працює від UID 1001 без доступу до
+  Docker-сокета, а 2.x сам налаштовує сокет і мережу для Lambda. LocalStack не підійшов як запасний
+  варіант: з 2026.03 він вимагає токен акаунта.
+- **EC2 у режимі mock** (`FLOCI_SERVICES_EC2_MOCK=true`). Floci 2.x запускає контейнер на кожен інстанс,
+  а AMI з Demo 1 (`ami-0abcdef1234567892`) у каталозі Floci — Ubuntu 20.04 x86_64, який на arm64 не
+  стартує. Mock дає саме поведінку, описану на слайді 32: інстанс — запис в емуляторі, а не VM.
+- **Demo 2 з викликом функції.** Слайди 33–36 зупиняються на `get-function`; скрипт ще й викликає
+  функцію з `{"name":"albums"}` і з `{}` (обидва `StatusCode 200`), що й доводить виконання коду.
+  Обробник зі слайда 34 покрито двома тестами, написаними до коду; Lambda — окремий Go-модуль
+  (`aws-lambda-go` v1.55.1 вимагає Go 1.26), тож `go ... ./...` кореневого модуля й CI його не збирають.
+- **Секрети поза Git.** `.env` не відстежується; секрети Kubernetes генерує
+  [create-secrets.sh](deploy/k8s/create-secrets.sh) у VM (`~/.albums-k8s.env`, права 600) і
+  повторно використовує, бо PostgreSQL зберігає перший пароль. Пароль БД — hex: `DATABASE_URL` є URL,
+  а застосунок його не кодує.
+- **Kubernetes.** PostgreSQL — StatefulSet із томом local-path за headless Service: стабільне ім'я
+  `postgres-0`, і дані пережили видалення пода (15 альбомів до і після). API — Deployment на 2 репліки:
+  initContainer чекає на `pg_isready` (без нього API завершується після 10 невдалих спроб підключення),
+  probes на `/health`, ліміти ресурсів, `runAsNonRoot` з `runAsUser: 1000` (kubelet перевіряє лише
+  числовий UID), read-only root filesystem. `COOKIE_SECURE=false`, бо в лабораторії HTTP. Ingress
+  маршрутизує за хостом `albums.localhost`, а не за префіксом шляху: UI посилається на кореневі шляхи
+  (`/static`, `/catalog`). Адміністратора створює одноразовий Job.
+- **Образ у k3s без реєстру:** `docker save --platform linux/arm64` + `k3s ctr -n k8s.io images import`,
+  `imagePullPolicy: IfNotPresent`. У VM голий `ctr` належить containerd Docker'а, тому лише `k3s ctr`.
+- **Обхід для Vagrant на macOS 27** ([port_check_fix.rb](deploy/vagrant/port_check_fix.rb)). Vagrant
+  2.4.9 перевіряє, чи зайнятий порт хоста, неблокуючим `connect` з тайм-аутом, а на macOS 27 такий
+  `connect` повідомляє про успіх навіть для відхиленого з'єднання (відтворено вбудованим Ruby Vagrant і
+  системним Ruby, у пісочниці й поза нею). Тож кожен порт, навіть SSH 2222, «зайнятий», і `vagrant up`
+  зупиняється з `ForwardPortCollision`. Виправлення — блокуючий `connect` з тайм-аутом 1 с;
+  [port_check_test.rb](deploy/vagrant/port_check_test.rb) перевіряє обидва напрями (закритий порт
+  вільний, порт зі слухачем зайнятий). Відтворення — у [vm.txt](docs/devops/vm.txt).
+- **kubeconfig (слайд 40).** `kubectl` у VM — це сам k3s, і без `KUBECONFIG` він читає
+  адміністративний `/etc/rancher/k3s/k3s.yaml` (доступний лише root), а не `~/.kube/config`.
+  Провізіонер копіює kubeconfig користувачеві `vagrant` і додає `KUBECONFIG` у `/etc/environment`.
+
+### Що в презентації не спрацювало як написано
+
+| Слайд | У презентації | Що виявилося | Як зроблено тут |
+|---|---|---|---|
+| 6 | box `ubuntu/jammy64` | лише amd64, на Apple Silicon не завантажується | `bento/ubuntu-24.04` arm64 |
+| 6 | `apt-get install -y golang` | у Ubuntu 22.04 це Go 1.18, а модуль albums вимагає Go 1.25.11 | збірка в Docker (`golang:1.25-alpine`, `GOTOOLCHAIN=auto`) |
+| 16 | стретч-мета: `HEALTHCHECK` для образу на `distroless/static` | у distroless немає shell, curl і wget | runtime-образ albums — alpine; здоров'я перевіряють `/health` і probes Kubernetes |
+| 25 | Terraform посилається на `aws_iam_role.lambda` | ресурс ролі ніде не визначено | Terraform умова не вимагає |
+| 30 | `hectorvent/floci:latest` | заморожена 1.5.5, без доступу до Docker-сокета на Linux | `floci/floci:2.3.0` |
+| 31 | IAM-політика `Version = "2026-10-17"`, `Service = "://amazonaws.com"` | версія має бути `2012-10-17`, сервіс — напр. `lambda.amazonaws.com`; справжній AWS таке відхилить | Terraform умова не вимагає |
+| 32 | AMI `ami-0abcdef1234567892` | у Floci 2.x це x86_64, на arm64 інстанс завершується | EC2 у режимі mock |
+| 35 | `GOARCH=amd64` | на arm64-VM Floci не виконає amd64-бінарник | `GOARCH=arm64`, `--architectures arm64` |
+| 36 | демо закінчується на `get-function` | виконання коду не показано | два виклики `invoke` |
+| 37 | `awslocal logs tail` | Floci 2.3.0 створює групу й потоки логів, але подій не пише (storedBytes 0) | показано в доказах, Demo 3 умова не вимагає |
+| 40 | копія kubeconfig у `~/.kube/config` | `kubectl` від k3s її не читає без `KUBECONFIG` | провізіонер задає `KUBECONFIG` |
+| 42–43 | секрет `llm` створюється двічі: з ключем `key` і з ключем `LLM_API_KEY` | другий `create` падає (`already exists`); `envFrom` бере імена змінних із ключів | `create-secrets.sh`: ключі = імена змінних, `--dry-run=client -o yaml \| kubectl apply` |
+
+### Докази
+
+- [docs/devops/vm.txt](docs/devops/vm.txt): VM (aarch64, Ubuntu 24.04.3, 4 CPU, 5,8 ГБ, `/app` через
+  vboxsf) і відтворення проблеми з перевіркою портів.
+- [docs/devops/docker.txt](docs/devops/docker.txt): Docker Engine 29.9.1, Compose v5.6.0, `hello-world`,
+  повторний провізіонер.
+- [docs/devops/compose.txt](docs/devops/compose.txt),
+  [docs/devops/smoke-compose.txt](docs/devops/smoke-compose.txt): стек Compose у VM (образ 16,3 МБ,
+  міграції, адміністратор), запити з Mac через переадресований порт, smoke 102/102.
+- [docs/devops/floci.txt](docs/devops/floci.txt): Floci 2.3.0, `ec2`/`lambda`/`logs` running, образ
+  Lambda `linux/arm64`.
+- [docs/devops/demo1-ec2.txt](docs/devops/demo1-ec2.txt): ключ, каталог AMI, інстанс `running`;
+  `awslocal` = `aws --endpoint-url http://localhost:4566`.
+- [docs/devops/demo2-lambda.txt](docs/devops/demo2-lambda.txt): функція Active на arm64, два виклики
+  з відповідями обробника, контейнер Lambda.
+- [docs/devops/k3s.txt](docs/devops/k3s.txt): вузол Ready (arm64), системні поди, local-path, DNS
+  кластера, Docker і k3s поруч.
+- [docs/devops/k8s.txt](docs/devops/k8s.txt), [docs/devops/smoke-k8s.txt](docs/devops/smoke-k8s.txt):
+  розгортання, NodePort і Ingress з Mac, вхід через cookie, самовідновлення, збереження даних,
+  smoke 102/102.
+- Скриншоти в [docs/screenshots/devops/](docs/screenshots/devops/): VM ([vagrant_run.png](docs/screenshots/devops/vagrant_run.png),
+  [vagrant-ubuntu.png](docs/screenshots/devops/vagrant-ubuntu.png), [virtualbox.png](docs/screenshots/devops/virtualbox.png)),
+  усе середовище ([environment.png](docs/screenshots/devops/environment.png)), демо
+  ([demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png)),
+  Compose ([devops-compose-catalog.png](docs/screenshots/devops/devops-compose-catalog.png),
+  [devops-compose-login.png](docs/screenshots/devops/devops-compose-login.png)), Kubernetes
+  ([k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png)).

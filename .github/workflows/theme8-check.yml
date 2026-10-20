@@ -90,6 +90,7 @@ jobs:
             internal/handler/web/handler.go internal/handler/web/catalog.go internal/handler/web/auth.go
             internal/handler/web/catalog_test.go internal/handler/web/fakes_test.go internal/app/web_test.go
             README.md prompts.txt albums_lesson10_homework.md
+            albums_lesson10_devops_homework.md Vagrantfile deploy/floci/compose.floci.yaml deploy/k8s/kustomization.yaml
           )
           missing=""
           for f in "${required[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
