@@ -20,3 +20,7 @@ test.log
 
 # Vagrant machine state, incl. the VM private key (Lesson 10 extra part: DevOps)
 .vagrant/
+
+# Demo 2 Lambda build output (go build ... -o bootstrap; zip function.zip bootstrap)
+deploy/floci/lambda/bootstrap
+deploy/floci/lambda/function.zip

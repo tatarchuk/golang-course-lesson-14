@@ -1,0 +1,53 @@
+# Lesson 10 extra part (DevOps), Task 7: deck Demo 2 (slides 33-36), a Go Lambda on Floci inside the VM (2026-10-20).
+# Built on the Mac (Go 1.27.1): GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap . && zip function.zip bootstrap
+#   -> bootstrap: ELF 64-bit LSB executable, ARM aarch64, statically linked; handler tests: 2/2 PASS (go test ./...).
+# Run: vagrant ssh -c /app/deploy/floci/demo2-lambda.sh. The script prints every command before its output.
+# Floci 2.3.0 keeps an empty log stream for the function (storedBytes 0), so logs tail prints nothing; the two
+# invokes (StatusCode 200 and the handler bodies) and the Lambda container in docker ps show the code running.
+
+
+$ awslocal lambda create-function --function-name demo-api --runtime provided.al2023 --handler bootstrap --architectures arm64 --zip-file fileb://function.zip --role arn:aws:iam::000000000000:role/lambda --query [FunctionName,Runtime,Architectures[0],State] --output text
+demo-api	provided.al2023	arm64	Active
+
+$ awslocal lambda wait function-active-v2 --function-name demo-api
+
+$ awslocal lambda get-function --function-name demo-api --query Configuration.[FunctionName,Runtime,Handler,Architectures[0],State] --output table
+---------------------
+|    GetFunction    |
++-------------------+
+|  demo-api         |
+|  provided.al2023  |
+|  bootstrap        |
+|  arm64            |
+|  Active           |
++-------------------+
+
+$ awslocal lambda invoke --function-name demo-api --cli-binary-format raw-in-base64-out --payload {"name":"albums"} /tmp/demo-api-out.json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+
+$ cat /tmp/demo-api-out.json
+{"statusCode":200,"body":"hello, albums from floci"}
+
+$ awslocal lambda invoke --function-name demo-api --cli-binary-format raw-in-base64-out --payload {} /tmp/demo-api-out.json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+
+$ cat /tmp/demo-api-out.json
+{"statusCode":200,"body":"hello, world from floci"}
+
+$ awslocal logs describe-log-streams --log-group-name /aws/lambda/demo-api --query logStreams[].[logStreamName,storedBytes] --output text
+2026/10/20/[$LATEST]43bd0e5d	0
+2026/10/20/[$LATEST]880b4552	0
+
+$ awslocal logs tail /aws/lambda/demo-api
+
+$ docker ps --format {{.Names}}\t{{.Image}}\t{{.Status}}
+floci-aws-demo-api-880b4552	49c8b85e353e	Up 1 second
+floci_aws	floci/floci:2.3.0	Up 35 minutes (healthy)
+app-api-1	app-api	Up 57 minutes
+app-postgres-1	postgres:16-alpine	Up 57 minutes (healthy)

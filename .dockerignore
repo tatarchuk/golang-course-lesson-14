@@ -8,3 +8,5 @@ api
 *.log
 .env
 .vagrant
+deploy/floci/lambda/bootstrap
+deploy/floci/lambda/function.zip
