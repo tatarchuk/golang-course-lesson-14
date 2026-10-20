@@ -35,6 +35,7 @@ Vagrant.configure("2") do |config|
   # Floci, the AWS emulator (slides 29-30), and the Lambda runtime image it starts for Demo 2.
   # `up -d` leaves a running container untouched, so this is safe to re-run.
   config.vm.provision "floci", type: "shell", inline: <<~SH
+    set -euo pipefail
     docker compose -f /app/deploy/floci/compose.floci.yaml up -d
     docker pull -q public.ecr.aws/lambda/provided:al2023
   SH

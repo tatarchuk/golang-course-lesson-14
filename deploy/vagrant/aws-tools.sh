@@ -4,7 +4,8 @@
 # added once.
 set -euo pipefail
 
-AWS_CLI_VERSION=2.38.2 # pinned (slide 38)
+AWS_CLI_VERSION=2.38.2     # pinned (slide 38)
+AWSCLI_LOCAL_VERSION=0.22.2
 
 missing=()
 for cmd in zip unzip gpg pipx; do
@@ -24,7 +25,7 @@ fi
 if ! command -v awslocal >/dev/null; then
   # The slide's `pip install awscli-local` fails on Ubuntu 24.04 (PEP 668: an externally managed
   # Python); pipx installs it into its own virtual environment.
-  PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install awscli-local
+  PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install "awscli-local==$AWSCLI_LOCAL_VERSION"
 fi
 
 # Test credentials and the emulator's default region for every login, including

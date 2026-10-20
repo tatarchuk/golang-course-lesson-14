@@ -10,8 +10,8 @@
 > `docker-compose.yml` у ньому вже є з попередніх тем. Робоча машина — Mac на Apple Silicon (arm64),
 > тому віртуальна машина, образи й бінарники теж arm64: box `ubuntu/jammy64` зі слайда 6 існує лише
 > для amd64. Пункт «**» (Kubernetes) в умові не має балів. Звіт — розділ «Lesson 10 — додаткова
-> частина: DevOps Basics» у `README.md`, докази — у `docs/devops/`, скриншоти —
-> `docs/screenshots/devops-*.png`.
+> частина: DevOps Basics» у `README.md`, докази — у `docs/devops/`, скриншоти — у
+> `docs/screenshots/devops/`.
 
 **Бали:** 70 (частина 1) + 30 (частина 2); частина 3 в умові балів не має.
 
@@ -58,7 +58,7 @@
 > VM, the images and the binaries are arm64 too: the deck's `ubuntu/jammy64` box (slide 6) exists
 > for amd64 only. The "**" item (Kubernetes) carries no points in the text. The report is the
 > "Lesson 10 — додаткова частина: DevOps Basics" section of `README.md`; evidence is under
-> `docs/devops/`, screenshots are `docs/screenshots/devops-*.png`.
+> `docs/devops/`, screenshots are under `docs/screenshots/devops/`.
 
 **Points:** 70 (Part 1) + 30 (Part 2); Part 3 has no points in the text.
 

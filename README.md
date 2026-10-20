@@ -715,7 +715,8 @@ VirtualBox 7.2.20 (box `bento/ubuntu-24.04` 202510.26.0, arm64, 4 vCPU, 6 ГБ) 
 застосунком у Compose і Floci, а поруч k3s зі своїм containerd. Репозиторій змонтовано у VM як `/app`
 (vboxsf, в обидва боки). Порти переадресовано лише на `127.0.0.1` Mac: 8080 (Compose), 30080 (NodePort
 k3s), 8081 → 80 (Traefik Ingress), 6443 (Kubernetes API). Усе встановлюють ідемпотентні провізіонери
-Vagrantfile; повторний `vagrant provision` нічого не змінює.
+Vagrantfile; повторний `vagrant provision` нічого не перевстановлює (провізіонер `floci` лише заново
+тягне образ рантайму Lambda за рухомим тегом `al2023`).
 
 | Компонент | Версія | Де | Перевірка |
 |---|---|---|---|
@@ -749,7 +750,10 @@ vagrant ssh -c 'sudo k3s ctr -n k8s.io images import /tmp/albums-api.tar'
 vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/namespace.yaml'
 vagrant ssh -c /app/deploy/k8s/create-secrets.sh
 vagrant ssh -c 'kubectl apply -k /app/deploy/k8s'
-vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml'
+vagrant ssh -c 'kubectl -n albums rollout status statefulset/postgres --timeout=300s'
+vagrant ssh -c 'kubectl -n albums rollout status deploy/albums-api --timeout=300s'
+vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml'   # лише коли PostgreSQL уже готовий
+vagrant ssh -c 'kubectl -n albums wait --for=condition=complete job/albums-bootstrap --timeout=120s'
 open http://localhost:30080/catalog                # NodePort
 open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhost браузер веде на 127.0.0.1)
 ```
@@ -764,7 +768,10 @@ open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhos
   `ubuntu/jammy64` зі слайда 6 (лише amd64). Lambda збирається з `GOARCH=arm64` і створюється з
   `--architectures arm64`: Floci запускає Lambda в контейнері з архітектурою хоста.
 - **Версії зафіксовано** (слайди 7, 15, 38, 46): box 202510.26.0, `floci/floci:2.3.0`, AWS CLI 2.38.2,
-  k3s v1.36.5+k3s1, образ `albums-api:1.0`; `latest` ніде не використовується.
+  awscli-local 0.22.2, k3s v1.36.5+k3s1, образ `albums-api:1.0` для k3s. Без фіксації лишилися пакети
+  Docker Engine з репозиторію Docker (ставиться актуальний 29.x), образ рантайму Lambda
+  `provided:al2023` (рухомий тег AWS) і локальний образ Compose `app-api`, який Compose збирає сам із
+  тегом `latest`.
 - **Floci 2.3.0 замість `hectorvent/floci:latest`.** Образ зі слайда 30 — заморожена збірка 1.5.5 того
   самого проєкту (він переїхав у `floci-io/floci`); 1.5.5 працює від UID 1001 без доступу до
   Docker-сокета, а 2.x сам налаштовує сокет і мережу для Lambda. LocalStack не підійшов як запасний
