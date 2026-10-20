@@ -1,0 +1,109 @@
+# Lesson 10 extra part (DevOps), Task 4: scripts/smoke.sh against the Compose stack inside the VM (2026-10-20).
+# The API runs in container app-api-1 (project "app", because the compose file sits in /app); SQL_LOG_CMD
+# points the N+1 checks at its log. Every check prints PASS or FAIL.
+
+$ vagrant ssh -c 'SQL_LOG_CMD="docker compose -f /app/docker-compose.yml logs --no-log-prefix api" /app/scripts/smoke.sh'
+== smoke test against http://localhost:8080 (tag 1792490832)
+PASS: /health returns status ok
+PASS: Swagger UI is served
+PASS: CORS preflight is handled
+PASS: Anonymous POST /genres -> 401
+PASS: Error code is unauthenticated
+PASS: POST /auth/register creates a member
+PASS: Registered role is member
+PASS: No password material in the response
+PASS: Register the same e-mail again -> 422
+PASS: Login with a wrong password -> 401
+PASS: Login with an unknown e-mail -> 401
+PASS: Login as the new member
+PASS: GET /me as member
+PASS: GET /me answers with the token's account
+PASS: Member POST /genres -> 403
+PASS: Error code is forbidden
+PASS: Member GET /users -> 403
+PASS: Login as the bootstrapped admin
+PASS: Admin GET /users
+PASS: Admin promotes the member to staff
+PASS: Role is now staff
+PASS: PUT /users/{id}/role with a bad role -> 422
+PASS: POST /genres creates a genre
+PASS: Duplicate genre name -> 409
+PASS: Error envelope: error.code is conflict
+PASS: POST /genres with an empty name -> 422
+PASS: GET /genres/{id}
+PASS: GET /genres lists genres
+PASS: POST /artists creates an artist
+PASS: POST /artists creates a second artist
+PASS: GET /artists/{id}
+PASS: GET /artists lists artists
+PASS: GET /artists/{unknown} -> 404
+PASS: POST /albums creates an album with relations
+PASS: Created album contains its artist
+PASS: Created album contains its genre
+PASS: Duplicate title + label -> 409
+PASS: Unknown artist id -> 422
+PASS: Error envelope: error.code is invalid_reference
+PASS: Unknown artist was NOT silently created
+PASS: Unknown genre -> 422
+PASS: Missing title -> 422
+PASS: Error envelope: error.code is validation_error
+PASS: Empty artist_ids -> 422
+PASS: GET /albums/{id}
+PASS: GET /albums/{id} returns artists
+PASS: GET /albums/{unknown} -> 404
+PASS: Error envelope: error.code is not_found
+PASS: POST /albums/{id}/copies creates a copy
+PASS: Copy status defaults to available
+PASS: POST second copy
+PASS: POST third copy (lost)
+PASS: Duplicate inventory number -> 409
+PASS: Copy for an unknown album -> 404
+PASS: Invalid copy status -> 422
+PASS: GET /albums/{id}/copies
+PASS: The album has 3 copies
+PASS: GET /albums/{id}/availability
+PASS: availability.album_id
+PASS: availability.total_copies is 3
+PASS: availability.available_copies is 2
+PASS: availability of an unknown album -> 404
+PASS: PUT /albums/{id} updates the album and replaces artists
+PASS: Title was updated
+PASS: Artists were replaced (count)
+PASS: Artists were replaced (id)
+PASS: PUT /albums/{unknown} -> 404
+PASS: GET /albums?genre_id filters by genre
+PASS: Genre filter returns exactly one album
+PASS: GET /albums?limit=100
+PASS: Seeded data is visible (at least 8 albums)
+PASS: Every listed album has a genre and artists
+PASS: Pagination: limit=2 returns 2 albums
+PASS: limit=2 gives exactly 2 items
+PASS: GET /albums uses a constant number of SELECTs (4) regardless of the number of albums
+PASS: DELETE /albums/{id} -> 204
+PASS: GET deleted album -> 404
+PASS: DELETE /albums/{unknown} -> 404
+PASS: GET /catalog renders the layout and the search form without delete buttons for a visitor
+PASS: Pages carry Content-Security-Policy, X-Frame-Options and nosniff
+PASS: GET /static/app.css is served from the binary
+PASS: Static assets are cacheable and nosniff
+PASS: GET /static/htmx.min.js is served from the binary (htmx 2.0.11)
+PASS: No directory listing and a 404 for a missing asset
+PASS: POST /albums creates the album the web checks search for and delete
+PASS: HX-Request GET /web/albums?q= answers the matching rows only
+PASS: A plain GET /web/albums redirects to /catalog?q=
+PASS: Anonymous DELETE /web/albums/{id} -> 401
+PASS: POST /login as admin -> 303 with an HttpOnly albums_token cookie
+PASS: POST /login with a wrong password -> 401 and no cookie
+PASS: GET /catalog with the admin cookie shows the account and the delete buttons
+PASS: Register a member for the web checks
+PASS: POST /login as a member -> 303
+PASS: Member DELETE /web/albums/{id} -> 403
+PASS: A bearer token is not a web session: DELETE /web/albums/{id} -> 401
+PASS: Cross-site DELETE with a valid cookie -> 403 (CrossOriginProtection)
+PASS: The album survived the rejected deletes
+PASS: Admin DELETE /web/albums/{id} -> empty 200 (htmx swaps the row away)
+PASS: The deleted album is gone from the API
+PASS: The fragment no longer lists the deleted album
+PASS: POST /logout -> 303 and the cookie is expired
+PASS: GET /catalog costs 5 SELECTs: the page, its relations and one availability query
+== done: all checks passed

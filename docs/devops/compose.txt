@@ -1,0 +1,34 @@
+# Lesson 10 extra part (DevOps), Task 4: albums + PostgreSQL in Docker Compose inside the VM (2026-10-20).
+# Every command is printed before its output. The stack was started with
+# 'docker compose -f /app/docker-compose.yml up -d --build': postgres became healthy before the api started.
+# Inside the VM the Compose project is 'app' (the directory of the compose file), hence app-api-1 / app_pgdata.
+# The dev password is written as <dev password>; the token is cut to 24 characters.
+
+$ vagrant ssh -c 'docker compose -f /app/docker-compose.yml ps --format "table {{.Name}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"'
+NAME             IMAGE                STATUS                    PORTS
+app-api-1        app-api              Up 12 minutes             0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+app-postgres-1   postgres:16-alpine   Up 12 minutes (healthy)   127.0.0.1:5432->5432/tcp
+$ vagrant ssh -c 'docker image ls app-api'
+IMAGE            ID             DISK USAGE   CONTENT SIZE   EXTRA
+app-api:latest   77226f417980       61.1MB         16.3MB   U    
+$ vagrant ssh -c 'docker volume ls --filter name=app_pgdata'
+DRIVER    VOLUME NAME
+local     app_pgdata
+$ vagrant ssh -c 'docker compose -f /app/docker-compose.yml logs --no-log-prefix api | grep -E "migrations|listening"'
+2026/10/20 09:55:29 migrations: applying the embedded set
+2026/10/20 09:55:29 migrations: schema version 3 (dirty=false)
+2026/10/20 09:55:29 listening on :8080
+$ vagrant ssh -c 'docker compose -f /app/docker-compose.yml exec -T -e ADMIN_PASSWORD=<dev password> api /app/bootstrap -email admin@albums.local'
+administrator admin@albums.local is ready (id 1)
+$ vagrant ssh -c 'curl -s localhost:8080/health'
+{"status":"ok"}
+
+# From the Mac, through the VirtualBox forward 127.0.0.1:8080 -> VM :8080:
+$ curl -s localhost:8080/health
+{"status":"ok"}
+
+$ curl -s 'localhost:8080/api/v1/albums?limit=2' | jq -c '.[] | {id, title}'
+{"id":1,"title":"Kind of Blue"}
+{"id":2,"title":"Sketches of Spain"}
+$ curl -s -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@albums.local","password":"<dev password>"}' | jq -r '.token[0:24]'
+eyJhbGciOiJIUzI1NiIsInR5...<redacted>
