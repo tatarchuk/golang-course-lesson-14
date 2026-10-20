@@ -17,3 +17,6 @@ result.json
 bin/
 app.log
 test.log
+
+# Vagrant machine state, incl. the VM private key (Lesson 10 extra part: DevOps)
+.vagrant/

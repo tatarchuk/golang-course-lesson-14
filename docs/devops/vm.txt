@@ -1,0 +1,42 @@
+# Lesson 10 extra part (DevOps), Task 2: the Vagrant VM (2026-10-20). Every command is printed before its output.
+# Host: Apple Silicon Mac (M2 Pro, 16 GB, macOS 27.0.1). Box bento/ubuntu-24.04 202510.26.0 (arm64), provider VirtualBox.
+
+$ vagrant --version
+Vagrant 2.4.9
+$ VBoxManage --version
+7.2.20r175154
+$ vagrant status
+default                   running (virtualbox)
+
+$ vagrant ssh -c 'uname -m'
+aarch64
+$ vagrant ssh -c 'grep PRETTY_NAME /etc/os-release'
+PRETTY_NAME="Ubuntu 24.04.3 LTS"
+$ vagrant ssh -c 'nproc'
+4
+$ vagrant ssh -c 'free -m'
+               total        used        free      shared  buff/cache   available
+Mem:            5779         322        5380           4         229        5457
+Swap:           3773           0        3773
+$ vagrant ssh -c 'findmnt -n -o TARGET,FSTYPE,SOURCE /app'
+/app   vboxsf app
+$ vagrant ssh -c 'python3 --version'
+Python 3.12.3
+
+# Why deploy/vagrant/port_check_fix.rb exists. The first `vagrant up` stopped with "The forwarded port to
+# 8080 is already in use on the host machine" although nothing listened on 8080. Vagrant 2.4.9 probes a
+# host port with Socket.tcp(host, port, connect_timeout: 0.1); on macOS 27 that non-blocking connect
+# reports a refused connection as a success, so every port (even SSH 2222) looked taken.
+
+$ nc -z -v -G 2 127.0.0.1 9
+nc: connectx to 127.0.0.1 port 9 (tcp) failed: Connection refused
+$ /opt/vagrant/embedded/bin/ruby -rsocket -e 'Socket.tcp("127.0.0.1", 9, connect_timeout: 0.1).close; puts "connected"'
+connected
+$ /opt/vagrant/embedded/bin/ruby -I/opt/vagrant/embedded/gems/gems/vagrant-2.4.9/lib deploy/vagrant/port_check_test.rb
+closed port 9       -> in use (WRONG)
+listening port 50329 -> in use (right)
+exit=1
+$ /opt/vagrant/embedded/bin/ruby -I/opt/vagrant/embedded/gems/gems/vagrant-2.4.9/lib deploy/vagrant/port_check_test.rb deploy/vagrant/port_check_fix.rb
+closed port 9       -> free (right)
+listening port 50332 -> in use (right)
+exit=0
