@@ -39,4 +39,5 @@ Vagrant.configure("2") do |config|
     docker pull -q public.ecr.aws/lambda/provided:al2023
   SH
   config.vm.provision "aws-tools", type: "shell", path: "deploy/vagrant/aws-tools.sh"
+  config.vm.provision "k3s", type: "shell", path: "deploy/vagrant/k3s.sh"
 end

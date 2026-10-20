@@ -1,0 +1,49 @@
+# Lesson 10 extra part (DevOps), Task 8: k3s v1.36.5+k3s1 in the VM, verified (2026-10-20). Every command is printed before its output.
+# Installed by the Vagrant provisioner deploy/vagrant/k3s.sh. Before it ran, 'kubectl get nodes' printed 'command not found'.
+# kubectl in the VM is k3s itself; the provisioner gives the vagrant user ~/.kube/config (slide 40) and KUBECONFIG.
+# The provisioner run below is a re-run: it leaves the installed k3s alone.
+
+$ vagrant provision --provision-with k3s | grep -E 'Running provisioner|already installed'
+==> default: Running provisioner: k3s (shell)...
+    default: k3s already installed: v1.36.5+k3s1
+$ vagrant ssh -c 'readlink -f /usr/local/bin/kubectl'
+/usr/local/bin/k3s
+$ vagrant ssh -c 'kubectl get nodes -o wide'
+NAME            STATUS   ROLES           AGE     VERSION        INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
+albums-devops   Ready    control-plane   2m32s   v1.36.5+k3s1   10.0.2.15     <none>        Ubuntu 24.04.3 LTS   6.8.0-86-generic (arm64)   containerd://2.3.4-k3s1.36
+$ vagrant ssh -c 'kubectl get nodes -o custom-columns=NAME:.metadata.name,ARCH:.status.nodeInfo.architecture,KUBELET:.status.nodeInfo.kubeletVersion'
+NAME            ARCH    KUBELET
+albums-devops   arm64   v1.36.5+k3s1
+$ vagrant ssh -c 'kubectl get pods -A'
+NAMESPACE     NAME                                      READY   STATUS      RESTARTS       AGE
+kube-system   coredns-7cfb7bc9c7-mll9q                  1/1     Running     0              2m29s
+kube-system   helm-install-traefik-crd-g6gpt            0/1     Completed   0              2m29s
+kube-system   helm-install-traefik-trgbp                0/1     Completed   2 (104s ago)   2m29s
+kube-system   local-path-provisioner-77b9867795-vc4nh   1/1     Running     0              2m29s
+kube-system   metrics-server-6dc596dfb8-tqmrj           1/1     Running     0              2m29s
+kube-system   svclb-traefik-e05bef7e-27n7n              2/2     Running     0              90s
+kube-system   traefik-7c8544f77-vgqg2                   1/1     Running     0              90s
+$ vagrant ssh -c 'kubectl get storageclass'
+NAME                   PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+local-path (default)   rancher.io/local-path   Delete          WaitForFirstConsumer   false                  2m34s
+$ vagrant ssh -c 'kubectl run dnscheck --image=busybox:1.36 --rm -i --restart=Never -- nslookup kubernetes.default.svc.cluster.local'
+Server:		10.43.0.10
+Address:	10.43.0.10:53
+
+
+Name:	kubernetes.default.svc.cluster.local
+Address: 10.43.0.1
+
+pod "dnscheck" deleted from default namespace
+$ vagrant ssh -c "docker ps --format '{{.Names}}  {{.Image}}  {{.Status}}'"
+floci_aws  floci/floci:2.3.0  Up 44 minutes (healthy)
+app-api-1  app-api  Up About an hour
+app-postgres-1  postgres:16-alpine  Up About an hour (healthy)
+$ vagrant ssh -c 'sudo k3s crictl ps'
+CONTAINER           IMAGE               CREATED              STATE               NAME                     ATTEMPT             POD ID              POD                                       NAMESPACE
+664fad0a5f695       8931bb3e26024       About a minute ago   Running             traefik                  0                   f833dd49cfb24       traefik-7c8544f77-vgqg2                   kube-system
+0ce3dcfa8f8a5       1084dac5ea987       About a minute ago   Running             lb-tcp-443               0                   f771c6b8aa4ab       svclb-traefik-e05bef7e-27n7n              kube-system
+a5f129f47e8ce       1084dac5ea987       About a minute ago   Running             lb-tcp-80                0                   f771c6b8aa4ab       svclb-traefik-e05bef7e-27n7n              kube-system
+ff967f9487beb       004fd242b0093       2 minutes ago        Running             local-path-provisioner   0                   4a7063dc40195       local-path-provisioner-77b9867795-vc4nh   kube-system
+41e12637be17b       37ceda8805d2e       2 minutes ago        Running             metrics-server           0                   d19256ea7fb8f       metrics-server-6dc596dfb8-tqmrj           kube-system
+6102dfa29c8dd       5d3b3e589fcf5       2 minutes ago        Running             coredns                  0                   3e6b4806ebf32       coredns-7cfb7bc9c7-mll9q                  kube-system
