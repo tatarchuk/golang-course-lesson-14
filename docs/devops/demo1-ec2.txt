@@ -1,0 +1,49 @@
+# Lesson 10 extra part (DevOps), Task 6: deck Demo 1 (slide 32), EC2 on Floci inside the VM (2026-10-20).
+# Run: vagrant ssh -c /app/deploy/floci/demo1-ec2.sh. The script prints every command before its output.
+# awslocal = the AWS CLI 2.38.2 with --endpoint-url http://localhost:4566; Floci runs EC2 in mock mode, so
+# the instance is a record in the emulator, not a VM (the slide: "it does not boot a real VM").
+
+$ awslocal ec2 create-key-pair --key-name demo --query KeyMaterial --output text
+-----BEGIN RSA PRIVATE KEY-----
+... (private key, 27 lines)
+
+$ awslocal ec2 describe-images --query Images[].[ImageId,Name,Architecture] --output table
+----------------------------------------------------------------------------------------------------------------
+|                                                DescribeImages                                                |
++-----------------------------+----------------------------------------------------------------------+---------+
+|  ami-0abcdef1234567890      |  amzn2-ami-hvm-2.0.20230404.0-x86_64-gp2                             |  x86_64 |
+|  ami-0abcdef1234567891      |  al2023-ami-2023.0.20230315.0-kernel-6.1-x86_64                      |  x86_64 |
+|  ami-amazonlinux2023-arm64  |  al2023-ami-2023.0.20230315.0-kernel-6.1-arm64                       |  arm64  |
+|  ami-0abcdef1234567892      |  ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-20230324      |  x86_64 |
+|  ami-ubuntu2204             |  ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20230420      |  x86_64 |
+|  ami-ubuntu2404-arm64       |  ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20260515  |  arm64  |
+|  ami-ubuntu2404-amd64       |  ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-20260515  |  x86_64 |
+|  ami-ubuntu2404-cloud-arm64 |  ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-20260515  |  arm64  |
+|  ami-debian12               |  debian-12-amd64-20230411                                            |  x86_64 |
+|  ami-alpine                 |  alpine-linux-latest-x86_64                                          |  x86_64 |
+|  ami-0abcdef1234567893      |  Windows_Server-2022-English-Full-Base-2023.04.12                    |  x86_64 |
++-----------------------------+----------------------------------------------------------------------+---------+
+
+$ awslocal ec2 run-instances --image-id ami-0abcdef1234567892 --instance-type t3.micro --key-name demo --query Instances[].[InstanceId,ImageId,InstanceType,State.Name] --output table
+-------------------------------------------------------------------------
+|                             RunInstances                              |
++----------------------+-------------------------+-----------+----------+
+|  i-d6d23dba5c21f52e8 |  ami-0abcdef1234567892  |  t3.micro |  pending |
++----------------------+-------------------------+-----------+----------+
+
+$ awslocal ec2 describe-instances --query Reservations[].Instances[].[InstanceId,ImageId,InstanceType,KeyName,State.Name] --output table
+---------------------------------------------------------------------------------
+|                               DescribeInstances                               |
++----------------------+-------------------------+-----------+-------+----------+
+|  i-d6d23dba5c21f52e8 |  ami-0abcdef1234567892  |  t3.micro |  demo |  running |
++----------------------+-------------------------+-----------+-------+----------+
+
+# awslocal only adds the endpoint. The same query with the plain AWS CLI pointed at Floci gives the same answer;
+# without --endpoint-url the CLI goes to real AWS, which rejects the test credentials.
+$ awslocal ec2 describe-instances --query "length(Reservations)"
+1
+$ aws --endpoint-url http://localhost:4566 ec2 describe-instances --query "length(Reservations)"
+1
+$ aws ec2 describe-instances --query "length(Reservations)"
+
+aws: [ERROR]: An error occurred (AuthFailure) when calling the DescribeInstances operation: AWS was not able to validate the provided access credentials

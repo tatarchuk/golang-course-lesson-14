@@ -38,4 +38,5 @@ Vagrant.configure("2") do |config|
     docker compose -f /app/deploy/floci/compose.floci.yaml up -d
     docker pull -q public.ecr.aws/lambda/provided:al2023
   SH
+  config.vm.provision "aws-tools", type: "shell", path: "deploy/vagrant/aws-tools.sh"
 end
