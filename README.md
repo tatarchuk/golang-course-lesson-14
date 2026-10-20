@@ -873,3 +873,6 @@ open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhos
 | M5 | Обхід перевірки портів не прив'язаний до версії Vagrant | **Documented**: перевірено на Vagrant 2.4.9; прибрати, коли перевірку виправлять у Vagrant або macOS |
 | — | Повний `vagrant up` з нуля жодного разу не запускався | **Fixed Now**: `vagrant destroy -f && vagrant up` — 3 хв 41 с, [rebuild.txt](docs/devops/rebuild.txt) |
 | — | CI не перевіряє скрипти й маніфести DevOps і не запускає тести Lambda | **Tracked**: кандидати — `bash -n` для `deploy/**/*.sh`, `docker compose config` для Floci, `go -C deploy/floci/lambda test` |
+
+Після виправлень CI зелений: [прогін 39427373820](https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/39427373820)
+(статичні перевірки, зокрема нові обов'язкові файли й `gofmt` для модуля Lambda; міграції, тести, smoke API).
