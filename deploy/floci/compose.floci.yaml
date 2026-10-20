@@ -1,0 +1,21 @@
+# Floci, the local AWS emulator of deck slides 29-30 ("Flossy" in the homework text), started inside
+# the Vagrant VM: docker compose -f /app/deploy/floci/compose.floci.yaml up -d
+# Changes from slide 30:
+# - image: the project moved from hectorvent/floci (frozen at 1.5.5) to floci/floci; pinned to a
+#   release instead of :latest (slide 38);
+# - FLOCI_SERVICES_EC2_MOCK: Floci 2.x starts a container per EC2 instance, and the deck's Demo 1 AMI is
+#   catalogued as x86_64, which cannot start in this arm64 VM; mock mode keeps the deck's behaviour
+#   ("mocks EC2 metadata; it does not boot a real VM"). Lambda still runs real containers;
+# - restart: Floci comes back after `vagrant halt` / `vagrant up`.
+services:
+  aws-emulator:
+    image: floci/floci:2.3.0
+    container_name: floci_aws
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      FLOCI_SERVICES_EC2_MOCK: "true"
+    volumes:
+      # Floci starts Lambda containers through the VM's Docker daemon.
+      - "/var/run/docker.sock:/var/run/docker.sock"

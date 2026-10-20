@@ -32,4 +32,10 @@ Vagrant.configure("2") do |config|
   # Provisioners: idempotent setup scripts that run on the first `vagrant up` and on
   # `vagrant provision [--provision-with NAME]` (slides 5 and 7).
   config.vm.provision "docker-engine", type: "shell", path: "deploy/vagrant/docker-engine.sh"
+  # Floci, the AWS emulator (slides 29-30), and the Lambda runtime image it starts for Demo 2.
+  # `up -d` leaves a running container untouched, so this is safe to re-run.
+  config.vm.provision "floci", type: "shell", inline: <<~SH
+    docker compose -f /app/deploy/floci/compose.floci.yaml up -d
+    docker pull -q public.ecr.aws/lambda/provided:al2023
+  SH
 end

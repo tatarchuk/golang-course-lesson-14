@@ -1,0 +1,22 @@
+# Lesson 10 extra part (DevOps), Task 5: Floci, the local AWS emulator, inside the VM (2026-10-20).
+# Every command is printed before its output. Before Floci started, 'curl -s localhost:4566/_localstack/health'
+# in the VM exited with code 7 (connection refused). Compose file: deploy/floci/compose.floci.yaml
+# (floci/floci:2.3.0, EC2 in mock mode, the Docker socket mounted for Lambda containers). The provisioner
+# run below is a re-run: it leaves the running container untouched.
+
+$ vagrant provision --provision-with floci | grep -E 'Running provisioner|Container|provided'
+==> default: Running provisioner: floci (shell)...
+    default:  Container floci_aws Running
+    default: public.ecr.aws/lambda/provided:al2023
+$ vagrant ssh -c "docker ps --filter name=floci_aws --format '{{.Names}} {{.Image}} {{.Status}} {{.Ports}}'"
+floci_aws floci/floci:2.3.0 Up About a minute (healthy) 127.0.0.1:4566->4566/tcp
+$ vagrant ssh -c 'curl -s localhost:4566/_localstack/health' 2>/dev/null | jq '{version, edition, ec2: .services.ec2, lambda: .services.lambda, logs: .services.logs}'
+{
+  "version": "2.3.0",
+  "edition": "community",
+  "ec2": "running",
+  "lambda": "running",
+  "logs": "running"
+}
+$ vagrant ssh -c "docker image inspect public.ecr.aws/lambda/provided:al2023 --format '{{.Os}}/{{.Architecture}}'"
+linux/arm64
