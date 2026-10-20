@@ -705,7 +705,7 @@ Basics for GenAI Developers». «Flossy» в умові — це Floci, лока
 |---|---|---|
 | 1. Середовище (70) | віртуальна машина зі встановленим Docker, запущений Floci, перевірений k3s | готово: [Vagrantfile](Vagrantfile), [vm.txt](docs/devops/vm.txt), [docker.txt](docs/devops/docker.txt), [floci.txt](docs/devops/floci.txt), [k3s.txt](docs/devops/k3s.txt); скриншот [environment.png](docs/screenshots/devops/environment.png) |
 | 1. Демо (70) | Demo 1 і Demo 2 з презентації | готово: [demo1-ec2.txt](docs/devops/demo1-ec2.txt), [demo2-lambda.txt](docs/devops/demo2-lambda.txt); скриншоти [demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png) |
-| 2. Docker Compose (+30) | Go-застосунок у контейнері разом із базою даних у Docker Compose | готово: [Dockerfile](Dockerfile) і [docker-compose.yml](docker-compose.yml) запущено у VM, [compose.txt](docs/devops/compose.txt), smoke 102/102 ([smoke-compose.txt](docs/devops/smoke-compose.txt)); скриншоти [каталог](docs/screenshots/devops/devops-compose-catalog.png), [вхід](docs/screenshots/devops/devops-compose-login.png) |
+| 2. Docker Compose (+30) | Go-застосунок у контейнері разом із базою даних у Docker Compose | готово: [Dockerfile](Dockerfile) і [docker-compose.yml](docker-compose.yml) запущено у VM, [compose.txt](docs/devops/compose.txt), smoke 102/102 ([smoke-compose.txt](docs/devops/smoke-compose.txt)); скриншоти [compose-ps.png](docs/screenshots/devops/compose-ps.png) (стек у VM і `/health` з Mac), [compose-browser.png](docs/screenshots/devops/compose-browser.png) (каталог від імені адміністратора) |
 | 3. Kubernetes (**) | розгорнути застосунок у Kubernetes | готово: [deploy/k8s/](deploy/k8s/), [k8s.txt](docs/devops/k8s.txt), smoke 102/102 ([smoke-k8s.txt](docs/devops/smoke-k8s.txt)); скриншоти [k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png) |
 
 ### Середовище
@@ -716,7 +716,8 @@ VirtualBox 7.2.20 (box `bento/ubuntu-24.04` 202510.26.0, arm64, 4 vCPU, 6 ГБ) 
 (vboxsf, в обидва боки). Порти переадресовано лише на `127.0.0.1` Mac: 8080 (Compose), 30080 (NodePort
 k3s), 8081 → 80 (Traefik Ingress), 6443 (Kubernetes API). Усе встановлюють ідемпотентні провізіонери
 Vagrantfile; повторний `vagrant provision` нічого не перевстановлює (провізіонер `floci` лише заново
-тягне образ рантайму Lambda за рухомим тегом `al2023`).
+тягне образ рантайму Lambda за рухомим тегом `al2023`). Відтворюваність перевірено: `vagrant destroy -f &&
+vagrant up` будує все середовище заново за 3 хв 41 с без ручних кроків ([rebuild.txt](docs/devops/rebuild.txt)).
 
 | Компонент | Версія | Де | Перевірка |
 |---|---|---|---|
@@ -844,10 +845,31 @@ open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhos
 - [docs/devops/k8s.txt](docs/devops/k8s.txt), [docs/devops/smoke-k8s.txt](docs/devops/smoke-k8s.txt):
   розгортання, NodePort і Ingress з Mac, вхід через cookie, самовідновлення, збереження даних,
   smoke 102/102.
+- [docs/devops/rebuild.txt](docs/devops/rebuild.txt): відтворюваність — `vagrant destroy -f && vagrant up`
+  за 3 хв 41 с заново ставить Docker, Floci, AWS CLI і k3s (awscli-local 0.22.2), стан середовища після.
 - Скриншоти в [docs/screenshots/devops/](docs/screenshots/devops/): VM ([vagrant_run.png](docs/screenshots/devops/vagrant_run.png),
   [vagrant-ubuntu.png](docs/screenshots/devops/vagrant-ubuntu.png), [virtualbox.png](docs/screenshots/devops/virtualbox.png)),
   усе середовище ([environment.png](docs/screenshots/devops/environment.png)), демо
   ([demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png)),
-  Compose ([devops-compose-catalog.png](docs/screenshots/devops/devops-compose-catalog.png),
-  [devops-compose-login.png](docs/screenshots/devops/devops-compose-login.png)), Kubernetes
+  Compose ([compose-ps.png](docs/screenshots/devops/compose-ps.png),
+  [compose-browser.png](docs/screenshots/devops/compose-browser.png)), Kubernetes
   ([k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png)).
+
+### Фінальне рев'ю
+
+Коли все було готово, окремий агент (Claude Code, свіжий контекст, Opus, лише читання репозиторію й
+запущеної VM) перечитав увесь diff гілки разом з умовою, презентацією, планом і журналом рішень.
+Необроблений звіт: [docs/devops/review-raw.md](docs/devops/review-raw.md). Критичних знахідок немає;
+усі п'ять ризиків з плану закрито, кластер збігається із закомітженими маніфестами (`kubectl diff`
+порожній), секретів у репозиторії немає. Тріаж:
+
+| № | Знахідка | Рішення |
+|---|---|---|
+| I1 | Скриншоти Compose збігалися байт у байт із рендерами Теми 10 (та сама сторінка, ті самі дані), а запланованого `compose-ps.png` не було | **Fixed Now**: [compose-ps.png](docs/screenshots/devops/compose-ps.png) (стек у VM і `/health` з Mac) і [compose-browser.png](docs/screenshots/devops/compose-browser.png) (каталог від імені адміністратора); дублікати видалено |
+| M1 | В умові був шлях `docs/screenshots/devops-*.png`, якого немає | **Fixed Now**: `docs/screenshots/devops/` в обох половинах |
+| M2 | README обіцяв, що `latest` ніде не використовується і що повторний provision нічого не змінює | **Fixed Now**: awscli-local зафіксовано (0.22.2), у «Рішеннях» перелічено, що зафіксовано, а що ні |
+| M3 | У «Як відтворити» Job адміністратора стартував, не чекаючи PostgreSQL | **Fixed Now**, підвищено до важливої (читач міг лишитися без входу): очікування обох rollout і завершення Job, як у перевіреному прогоні |
+| M4 | Вбудований провізіонер `floci` не зупинявся на першій помилці | **Fixed Now**: `set -euo pipefail` |
+| M5 | Обхід перевірки портів не прив'язаний до версії Vagrant | **Documented**: перевірено на Vagrant 2.4.9; прибрати, коли перевірку виправлять у Vagrant або macOS |
+| — | Повний `vagrant up` з нуля жодного разу не запускався | **Fixed Now**: `vagrant destroy -f && vagrant up` — 3 хв 41 с, [rebuild.txt](docs/devops/rebuild.txt) |
+| — | CI не перевіряє скрипти й маніфести DevOps і не запускає тести Lambda | **Tracked**: кандидати — `bash -n` для `deploy/**/*.sh`, `docker compose config` для Floci, `go -C deploy/floci/lambda test` |

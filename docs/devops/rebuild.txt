@@ -1,0 +1,47 @@
+# Lesson 10 extra part (DevOps): reproducibility check (deck slide 3, infrastructure as code), 2026-10-20.
+# The VM was destroyed and rebuilt from the Vagrantfile alone; every provisioner ran in order, nothing by hand.
+# env-status.sh ran once the k3s system pods had started (about 90 s after vagrant up returned).
+
+$ vagrant destroy -f && vagrant up   (key lines; start/end are wall-clock times on the Mac)
+start 15:40:53
+==> default: Destroying VM and associated drives...
+destroy exit=0
+==> default: Machine booted and ready!
+==> default: Mounting shared folders...
+==> default: Running provisioner: docker-engine (shell)...
+    default: docker installed: Docker version 29.9.1, build dfc520d; Docker Compose version v5.6.0
+==> default: Running provisioner: floci (shell)...
+    default:  Container floci_aws Started
+==> default: Running provisioner: aws-tools (shell)...
+    default: aws-tools ready: aws-cli/2.38.2 Python/3.14.6 Linux/6.8.0-86-generic script-exe/aarch64.ubuntu.24; awslocal at /usr/local/bin/awslocal
+==> default: Running provisioner: k3s (shell)...
+    default: albums-devops   Ready    control-plane   3s    v1.36.5+k3s1
+up exit=0
+end 15:44:34
+
+$ vagrant ssh -c 'sudo PIPX_HOME=/opt/pipx pipx list --short'
+awscli-local 0.22.2
+
+$ vagrant ssh -c /app/deploy/vagrant/env-status.sh
+== VM albums-devops: Ubuntu 24.04.3 LTS, aarch64, 4 CPUs, 5779 MB
+
+== Docker 29.9.1: containers
+NAMES       IMAGE               STATUS
+floci_aws   floci/floci:2.3.0   Up 3 minutes (healthy)
+
+== Floci (the AWS emulator) on localhost:4566
+{"version":"2.3.0","ec2":"running","lambda":"running"}
+
+== k3s: nodes
+NAME            STATUS   ROLES           AGE   VERSION        INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION             CONTAINER-RUNTIME
+albums-devops   Ready    control-plane   96s   v1.36.5+k3s1   10.0.2.15     <none>        Ubuntu 24.04.3 LTS   6.8.0-86-generic (arm64)   containerd://2.3.4-k3s1.36
+
+== k3s: pods in all namespaces
+NAMESPACE     NAME                                      READY   STATUS      RESTARTS      AGE
+kube-system   coredns-7cfb7bc9c7-bqlhh                  1/1     Running     0             90s
+kube-system   helm-install-traefik-2cz9c                0/1     Completed   1 (42s ago)   90s
+kube-system   helm-install-traefik-crd-fz7dh            0/1     Completed   0             90s
+kube-system   local-path-provisioner-77b9867795-sxklq   1/1     Running     0             90s
+kube-system   metrics-server-6dc596dfb8-8b69q           1/1     Running     0             90s
+kube-system   svclb-traefik-752c8d60-9whpf              2/2     Running     0             40s
+kube-system   traefik-7c8544f77-cqgj2                   1/1     Running     0             40s
