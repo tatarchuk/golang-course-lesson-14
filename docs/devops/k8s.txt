@@ -1,0 +1,169 @@
+# Lesson 10 extra part (DevOps), Task 9: albums + PostgreSQL deployed to k3s (2026-10-20).
+# The session transcript in the order the commands ran; every command is printed before its output.
+# Commands without a marker ran inside the VM (vagrant ssh -c '...'); "(Mac)" marks commands on the host.
+# Manifests: deploy/k8s/ (kubectl apply -k), Secrets: deploy/k8s/create-secrets.sh, Job: deploy/k8s/bootstrap-job.yaml.
+# The dev password is written as <dev password>; the cookie value is cut to 24 characters.
+
+# --- Before
+$ kubectl get ns albums
+Error from server (NotFound): namespaces "albums" not found
+
+# --- 1. The image: built by Docker in the VM and imported into k3s's own containerd (namespace k8s.io,
+# the one the kubelet reads); k3s does not see Docker's images. The "albums api" in the import line is
+# ctr's progress display; the listing below shows the stored name.
+$ docker build -q -t albums-api:1.0 /app
+sha256:38a3ffa20403e69ae1465f19de586870afe65392ba15a7dc5fe1811781c3f6e0
+$ docker run --rm --entrypoint id albums-api:1.0
+uid=1000(app) gid=1000(app) groups=1000(app)
+$ docker save --platform linux/arm64 -o /tmp/albums-api.tar albums-api:1.0
+$ ls -lh /tmp/albums-api.tar | awk '{print $5, $9}'
+16M /tmp/albums-api.tar
+$ sudo k3s ctr -n k8s.io images import /tmp/albums-api.tar
+docker.io/library/albums api:1.0        	saved
+application/vnd.oci.image.manifest.v1+json sha256:8691c4ecc2ccb0a27f6338f5a7e886695d48077219560f44abaaaa02d8031833
+Importing	elapsed: 0.4 s	total:   0.0 B	(0.0 B/s)
+$ sudo k3s ctr -n k8s.io images ls -q | grep albums-api
+docker.io/library/albums-api:1.0
+
+# --- 2. Render the manifests, create the namespace and the Secrets, validate on the server.
+$ kubectl kustomize /app/deploy/k8s | grep -E '^(kind|  name|  namespace):'
+kind: Namespace
+  name: albums
+kind: ConfigMap
+  name: albums-config
+  namespace: albums
+kind: Service
+  name: albums-api
+  namespace: albums
+kind: Service
+  name: postgres
+  namespace: albums
+kind: Deployment
+  name: albums-api
+  namespace: albums
+kind: StatefulSet
+  name: postgres
+  namespace: albums
+kind: Ingress
+  name: albums-api
+  namespace: albums
+$ kubectl apply -f /app/deploy/k8s/namespace.yaml
+namespace/albums created
+$ /app/deploy/k8s/create-secrets.sh
+secret/albums-db created
+secret/albums-app created
+secret/albums-admin created
+$ kubectl -n albums get secrets
+NAME           TYPE     DATA   AGE
+albums-admin   Opaque   1      2s
+albums-app     Opaque   2      2s
+albums-db      Opaque   1      2s
+$ kubectl apply -k /app/deploy/k8s --dry-run=server
+namespace/albums unchanged (server dry run)
+configmap/albums-config created (server dry run)
+service/albums-api created (server dry run)
+service/postgres created (server dry run)
+deployment.apps/albums-api created (server dry run)
+statefulset.apps/postgres created (server dry run)
+ingress.networking.k8s.io/albums-api created (server dry run)
+$ ls -l /home/vagrant/.albums-k8s.env | awk '{print $1, $3, $9}'
+-rw------- vagrant /home/vagrant/.albums-k8s.env
+
+# --- 3. Apply and wait for both rollouts.
+$ kubectl apply -k /app/deploy/k8s
+namespace/albums unchanged
+configmap/albums-config created
+service/albums-api created
+service/postgres created
+deployment.apps/albums-api created
+statefulset.apps/postgres created
+ingress.networking.k8s.io/albums-api created
+$ kubectl -n albums rollout status statefulset/postgres --timeout=300s
+Waiting for 1 pods to be ready...
+partitioned roll out complete: 1 new pods have been updated...
+$ kubectl -n albums rollout status deploy/albums-api --timeout=300s
+Waiting for deployment "albums-api" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "albums-api" rollout to finish: 1 of 2 updated replicas are available...
+deployment "albums-api" successfully rolled out
+$ kubectl -n albums get pods,svc,ingress,pvc -o wide
+NAME                             READY   STATUS    RESTARTS   AGE   IP           NODE            NOMINATED NODE   READINESS GATES
+pod/albums-api-9784ccc48-v42qx   1/1     Running   0          42s   10.42.0.11   albums-devops   <none>           <none>
+pod/albums-api-9784ccc48-w8p29   1/1     Running   0          42s   10.42.0.12   albums-devops   <none>           <none>
+pod/postgres-0                   1/1     Running   0          42s   10.42.0.14   albums-devops   <none>           <none>
+
+NAME                 TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)          AGE   SELECTOR
+service/albums-api   NodePort    10.43.28.93   <none>        8080:30080/TCP   42s   app=albums-api
+service/postgres     ClusterIP   None          <none>        5432/TCP         42s   app=postgres
+
+NAME                                   CLASS     HOSTS              ADDRESS     PORTS   AGE
+ingress.networking.k8s.io/albums-api   traefik   albums.localhost   10.0.2.15   80      42s
+
+NAME                                    STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE   VOLUMEMODE
+persistentvolumeclaim/data-postgres-0   Bound    pvc-13604ded-cff0-47e9-8471-54cce15b0aaa   1Gi        RWO            local-path     <unset>                 42s   Filesystem
+
+# The init container held the API back until PostgreSQL answered; then the API migrated and listened.
+$ kubectl -n albums logs pod/albums-api-9784ccc48-v42qx -c wait-for-postgres
+postgres:5432 - no response
+postgres:5432 - no response
+postgres:5432 - accepting connections
+$ kubectl -n albums logs pod/albums-api-9784ccc48-v42qx -c api | grep -E 'migrations|listening'
+2026/10/20 11:13:50 migrations: applying the embedded set
+2026/10/20 11:13:50 migrations: schema version 3 (dirty=false)
+2026/10/20 11:13:50 listening on :8080
+
+# --- 4. The administrator, by a one-off Job.
+$ kubectl -n albums delete job albums-bootstrap --ignore-not-found
+$ kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml
+job.batch/albums-bootstrap created
+$ kubectl -n albums wait --for=condition=complete job/albums-bootstrap --timeout=120s
+job.batch/albums-bootstrap condition met
+$ kubectl -n albums logs job/albums-bootstrap
+2026/10/20 11:14:12 migrations: schema version 3 (dirty=false)
+administrator admin@albums.local is ready (id 1)
+
+# --- 5. From the Mac: the NodePort (VirtualBox forwards 127.0.0.1:30080) and Traefik (Mac 8081 -> VM 80).
+$ curl -s localhost:30080/health   (Mac)
+{"status":"ok"}
+$ curl -s 'localhost:30080/api/v1/albums?limit=2' | jq -c '.[] | {id, title}'   (Mac)
+{"id":1,"title":"Kind of Blue"}
+{"id":2,"title":"Sketches of Spain"}
+$ curl -s -H 'Host: albums.localhost' localhost:8081/health   (Mac)
+{"status":"ok"}
+$ curl -s -o /dev/null -w '%{http_code}' localhost:8081/health   (Mac; no Host header, so Traefik has no route)
+404
+$ curl -s -i -X POST localhost:30080/login --data-urlencode email=admin@albums.local --data-urlencode password=<dev password> | grep -E '^(HTTP|Location|Set-Cookie)' | sed -E 's/(albums_token=.{24})[^;]*/\1...<redacted>/'   (Mac)
+HTTP/1.1 303 See Other
+Location: /catalog
+Set-Cookie: albums_token=eyJhbGciOiJIUzI1NiIsInR5...<redacted>; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax
+
+# scripts/smoke.sh against the NodePort: docs/devops/smoke-k8s.txt (102 PASS, 0 FAIL).
+
+# --- 6. Self-healing (slide 47): the Deployment replaces deleted pods.
+$ kubectl -n albums get pods -l app=albums-api
+NAME                         READY   STATUS    RESTARTS   AGE
+albums-api-9784ccc48-v42qx   1/1     Running   0          21m
+albums-api-9784ccc48-w8p29   1/1     Running   0          21m
+$ kubectl -n albums delete pod -l app=albums-api
+pod "albums-api-9784ccc48-v42qx" deleted from albums namespace
+pod "albums-api-9784ccc48-w8p29" deleted from albums namespace
+$ kubectl -n albums rollout status deploy/albums-api --timeout=180s
+deployment "albums-api" successfully rolled out
+$ kubectl -n albums get pods -l app=albums-api
+NAME                         READY   STATUS    RESTARTS   AGE
+albums-api-9784ccc48-4pbbr   1/1     Running   0          3s
+albums-api-9784ccc48-ltc7l   1/1     Running   0          3s
+$ curl -s localhost:30080/health   (Mac)
+{"status":"ok"}
+
+# --- 7. Persistence: the StatefulSet recreates postgres-0 with the same name and the same volume.
+$ curl -s 'localhost:30080/api/v1/albums?limit=100' | jq length   (Mac, before)
+15
+$ kubectl -n albums delete pod postgres-0
+pod "postgres-0" deleted from albums namespace
+$ kubectl -n albums rollout status statefulset/postgres --timeout=180s
+partitioned roll out complete: 1 new pods have been updated...
+$ kubectl -n albums get pod postgres-0 -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,STARTED:.status.startTime,PVC:.spec.volumes[0].persistentVolumeClaim.claimName
+NAME         STATUS    STARTED                PVC
+postgres-0   Running   2026-10-20T11:34:47Z   data-postgres-0
+$ curl -s 'localhost:30080/api/v1/albums?limit=100' | jq length   (Mac, after)
+15

@@ -1,0 +1,5 @@
+# Everything of the albums deployment lives in its own namespace (slide 40).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: albums

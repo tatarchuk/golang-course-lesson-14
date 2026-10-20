@@ -1,0 +1,41 @@
+# One-off task: give admin@albums.local the password from Secret albums-admin (cmd/bootstrap is
+# idempotent). Applied after the API is up. A Job's pod template cannot be changed, so delete the
+# old Job before running it again:
+#   kubectl -n albums delete job albums-bootstrap --ignore-not-found
+#   kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: albums-bootstrap
+  namespace: albums
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: bootstrap
+          image: albums-api:1.0
+          imagePullPolicy: IfNotPresent
+          command: ["/app/bootstrap"]
+          args: ["-email", "admin@albums.local"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: albums-app
+                  key: DATABASE_URL
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: albums-admin
+                  key: ADMIN_PASSWORD
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

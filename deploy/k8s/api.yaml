@@ -1,0 +1,95 @@
+# The albums API (deck slides 41-46): plain settings in a ConfigMap, secrets from Secret albums-app
+# (DATABASE_URL, JWT_SECRET; deploy/k8s/create-secrets.sh), two replicas behind a NodePort Service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: albums-config
+data:
+  PORT: "8080"
+  # Plain HTTP in this lab: browsers drop a Secure cookie there, and the login would silently fail.
+  COOKIE_SECURE: "false"
+  DB_LOG_LEVEL: info
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: albums-api
+  labels:
+    app: albums-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: albums-api
+  template:
+    metadata:
+      labels:
+        app: albums-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # The image's user "app"; the kubelet can only verify non-root for a numeric user.
+        runAsUser: 1000
+        runAsGroup: 1000
+      initContainers:
+        # The API exits after 10 failed database connection attempts, so it starts only once
+        # PostgreSQL answers.
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h postgres -U albums; do sleep 2; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: api
+          image: albums-api:1.0
+          # Imported into k3s (docker save + k3s ctr images import), not pulled from a registry.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: albums-config
+            - secretRef:
+                name: albums-app
+          # /health answers once migrations are done and the server listens.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: albums-api
+spec:
+  type: NodePort
+  selector:
+    app: albums-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080

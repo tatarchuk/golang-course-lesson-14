@@ -1,0 +1,11 @@
+# albums on k3s: kubectl apply -k /app/deploy/k8s (inside the VM).
+# The Secrets come from create-secrets.sh, so nothing secret is in Git; the bootstrap Job is applied
+# separately, once the API runs.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: albums
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - api.yaml
+  - ingress.yaml

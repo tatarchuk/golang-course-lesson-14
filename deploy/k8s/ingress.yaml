@@ -1,0 +1,21 @@
+# Traefik, the ingress controller bundled with k3s (slide 44), routes requests for the host
+# albums.localhost to the albums-api Service. A host rule, not a path prefix: the UI links to
+# root-absolute paths (/static, /catalog, /login). From the Mac: http://albums.localhost:8081
+# (VirtualBox forwards the Mac's 8081 to the VM's port 80).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: albums-api
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: albums.localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: albums-api
+                port:
+                  name: http
