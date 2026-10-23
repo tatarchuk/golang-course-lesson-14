@@ -1,0 +1,6 @@
+build/
+.aws-sam/
+*.zip
+out.json
+terraform/.terraform/
+terraform/*.tfstate*

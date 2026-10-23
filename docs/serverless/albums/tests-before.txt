@@ -1,0 +1,24 @@
+$ make test   # before the implementation
+go vet ./...
+# albums-lambda/cmd/webhook
+# [albums-lambda/cmd/webhook]
+vet: cmd/webhook/album_test.go:12:12: undefined: Config
+make: *** [Makefile:11: test] Error 1
+exit=2
+
+$ go test ./...   # the compiler lists every missing symbol
+# albums-lambda/cmd/webhook [albums-lambda/cmd/webhook.test]
+cmd/webhook/album_test.go:12:12: undefined: Config
+cmd/webhook/album_test.go:19:19: undefined: Album
+cmd/webhook/album_test.go:20:9: undefined: Album
+cmd/webhook/album_test.go:24:8: undefined: Album
+cmd/webhook/album_test.go:32:19: undefined: normalize
+cmd/webhook/album_test.go:36:10: undefined: Album
+cmd/webhook/album_test.go:52:19: undefined: normalize
+cmd/webhook/album_test.go:62:17: undefined: normalize
+cmd/webhook/album_test.go:62:27: undefined: Album
+cmd/webhook/album_test.go:77:17: undefined: normalize
+cmd/webhook/album_test.go:77:17: too many errors
+FAIL	albums-lambda/cmd/webhook [build failed]
+FAIL
+exit=1

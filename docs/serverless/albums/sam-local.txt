@@ -1,0 +1,93 @@
+$ make sam-invoke
+sam build
+Building codeuri: /vagrant/albums-lambda runtime: provided.al2023 architecture: arm64 functions: AlbumWebhookFunction
+AlbumWebhookFunction: Running CustomMakeBuilder:CopySource
+AlbumWebhookFunction: Running CustomMakeBuilder:MakeBuild
+AlbumWebhookFunction: Current Artifacts Directory : /vagrant/albums-lambda/.aws-sam/build/AlbumWebhookFunction
+make[1]: Entering directory '/tmp/tmp193gl33p'
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -ldflags="-s -w" -o /vagrant/albums-lambda/.aws-sam/build/AlbumWebhookFunction/bootstrap ./cmd/webhook
+make[1]: Leaving directory '/tmp/tmp193gl33p'
+
+Build Succeeded
+
+Built Artifacts  : .aws-sam/build
+Built Template   : .aws-sam/build/template.yaml
+
+Commands you can use next
+=========================
+[*] Validate SAM template: sam validate
+[*] Invoke Function: sam local invoke
+[*] Test Function in the Cloud: sam sync --stack-name {{stack-name}} --watch
+[*] Deploy: sam deploy --guided
+sam local invoke AlbumWebhookFunction -e events/valid.json
+No current session found, using default AWS::AccountId
+Invoking bootstrap (provided.al2023)
+Local image is up-to-date
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+
+Mounting /vagrant/albums-lambda/.aws-sam/build/AlbumWebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: 1e0f20550374ed80b87e65edeace39702aecd270cd1f6926081afb450387ad99
+START RequestId: af52baf2-035e-4dd1-a905-0a3f2fae0239 Version: $LATEST
+{"time":"2026-10-23T10:17:24.283631878Z","level":"INFO","msg":"album processed","request_id":"af52baf2-035e-4dd1-a905-0a3f2fae0239","title":"Kind of Blue"}
+END RequestId: af52baf2-035e-4dd1-a905-0a3f2fae0239
+REPORT RequestId: af52baf2-035e-4dd1-a905-0a3f2fae0239	Init Duration: 0.05 ms	Duration: 57.55 ms	Billed Duration: 58 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+{"statusCode": 200, "headers": {"Content-Type": "application/json", "X-Request-Id": "af52baf2-035e-4dd1-a905-0a3f2fae0239"}, "multiValueHeaders": null, "body": "{\"album\":{\"title\":\"Kind of Blue\",\"label\":\"Columbia\",\"artists\":[\"Miles Davis\",\"John Coltrane\"],\"genre\":\"jazz\",\"release_year\":1959,\"notes\":\"Recorded in 1959.\"},\"status\":\"processed\"}"}
+2026/10/23 10:17:24 failed to get the next invoke: Get "http://127.0.0.1:9001/2018-06-01/runtime/invocation/next": dial tcp 127.0.0.1:9001: connect: connection refused
+sam local invoke AlbumWebhookFunction -e events/invalid.json
+No current session found, using default AWS::AccountId
+Invoking bootstrap (provided.al2023)
+Local image is up-to-date
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+
+Mounting /vagrant/albums-lambda/.aws-sam/build/AlbumWebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: c257d0cfe497e0cc3189826ad9c0f34500b736444ed2b932711e6e84d2d2bc80
+START RequestId: 9529bf7d-2a1e-421a-8b59-780f250e2822 Version: $LATEST
+{"time":"2026-10-23T10:17:27.647392378Z","level":"WARN","msg":"invalid json","request_id":"9529bf7d-2a1e-421a-8b59-780f250e2822","error":"unexpected end of JSON input"}
+END RequestId: 9529bf7d-2a1e-421a-8b59-780f250e2822
+REPORT RequestId: 9529bf7d-2a1e-421a-8b59-780f250e2822	Init Duration: 0.04 ms	Duration: 2.53 ms	Billed Duration: 3 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+{"statusCode": 400, "headers": {"Content-Type": "application/json", "X-Request-Id": "9529bf7d-2a1e-421a-8b59-780f250e2822"}, "multiValueHeaders": null, "body": "{\"error\":\"invalid json\"}"}
+2026/10/23 10:17:27 failed to get the next invoke: Get "http://127.0.0.1:9001/2018-06-01/runtime/invocation/next": dial tcp 127.0.0.1:9001: connect: connection refused
+sam local invoke AlbumWebhookFunction -e events/missing_field.json
+No current session found, using default AWS::AccountId
+Invoking bootstrap (provided.al2023)
+Local image is up-to-date
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+
+Mounting /vagrant/albums-lambda/.aws-sam/build/AlbumWebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: d89a5546d90fe9f0525a241063a423f74142825ccae4c9e019c50022df239b3a
+START RequestId: d51b069f-6436-4fbf-9177-9d2ce56af7e1 Version: $LATEST
+{"time":"2026-10-23T10:17:31.040859306Z","level":"WARN","msg":"validation failed","request_id":"d51b069f-6436-4fbf-9177-9d2ce56af7e1","problems":["label is required","artists must contain at least one name","genre is required"]}
+END RequestId: d51b069f-6436-4fbf-9177-9d2ce56af7e1
+REPORT RequestId: d51b069f-6436-4fbf-9177-9d2ce56af7e1	Init Duration: 0.04 ms	Duration: 3.06 ms	Billed Duration: 4 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+{"statusCode": 400, "headers": {"Content-Type": "application/json", "X-Request-Id": "d51b069f-6436-4fbf-9177-9d2ce56af7e1"}, "multiValueHeaders": null, "body": "{\"details\":[\"label is required\",\"artists must contain at least one name\",\"genre is required\"],\"error\":\"validation failed\"}"}
+2026/10/23 10:17:31 failed to get the next invoke: Get "http://127.0.0.1:9001/2018-06-01/runtime/invocation/next": dial tcp 127.0.0.1:9001: connect: connection refused
+
+=================== sam local start-api
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d @events/payload_valid.json
+{"album":{"title":"Kind of Blue","label":"Columbia","artists":["Miles Davis","John Coltrane"],"genre":"jazz","release_year":1959,"notes":"Recorded in 1959."},"status":"processed"}
+HTTP 200
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d @events/payload_malformed.json
+{"error":"invalid json"}
+HTTP 400
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d @events/payload_missing_field.json
+{"details":["label is required","artists must contain at least one name","genre is required"],"error":"validation failed"}
+HTTP 400
+
+--- start-api log (requests and REPORT lines)
+{"time":"2026-10-23T10:17:34.912317737Z","level":"INFO","msg":"album processed","request_id":"8a8f295f-5373-4fe8-9b01-3490fb44a1bb","title":"Kind of Blue"}
+REPORT RequestId: 8a8f295f-5373-4fe8-9b01-3490fb44a1bb	Init Duration: 0.03 ms	Duration: 3.70 ms	Billed Duration: 4 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+2026-10-23 10:17:35 127.0.0.1 - - [23/Oct/2026 10:17:35] "POST /webhook HTTP/1.1" 200 -
+2026-10-23 10:17:36 127.0.0.1 - - [23/Oct/2026 10:17:36] "POST /webhook HTTP/1.1" 400 -
+{"time":"2026-10-23T10:17:36.385963442Z","level":"WARN","msg":"validation failed","request_id":"4577bea6-6a57-4685-9f3f-bd48c2ab8fd0","problems":["label is required","artists must contain at least one name","genre is required"]}
+REPORT RequestId: 4577bea6-6a57-4685-9f3f-bd48c2ab8fd0	Init Duration: 0.04 ms	Duration: 2.15 ms	Billed Duration: 3 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+2026-10-23 10:17:37 127.0.0.1 - - [23/Oct/2026 10:17:37] "POST /webhook HTTP/1.1" 400 -
+
+=================== five more cold sam local invoke runs of valid.json (for the cold-start comparison)
+  run 1: Init Duration: 0.05 ms	Duration: 3.03 ms	Billed Duration: 4 ms | whole sam local invoke: 3485 ms
+  run 2: Init Duration: 0.03 ms	Duration: 4.03 ms	Billed Duration: 5 ms | whole sam local invoke: 7425 ms
+  run 3: Init Duration: 0.03 ms	Duration: 2.22 ms	Billed Duration: 3 ms | whole sam local invoke: 3426 ms
+  run 4: Init Duration: 0.07 ms	Duration: 5.36 ms	Billed Duration: 6 ms | whole sam local invoke: 3667 ms
+  run 5: Init Duration: 0.04 ms	Duration: 2.42 ms	Billed Duration: 3 ms | whole sam local invoke: 3385 ms

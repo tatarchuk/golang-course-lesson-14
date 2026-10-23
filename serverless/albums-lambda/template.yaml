@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: albums-lambda, the album.submitted webhook of Lesson 12, tested locally with sam local.
+
+Resources:
+  AlbumWebhookFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile        # sam build runs `make build-AlbumWebhookFunction`
+    Properties:
+      CodeUri: .
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Architectures: [arm64]       # matches GOARCH=arm64 in the Makefile (slide 42)
+      Timeout: 10
+      MemorySize: 256
+      Events:
+        Webhook:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: post
