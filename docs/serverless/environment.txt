@@ -1,0 +1,30 @@
+== VM vagrant: Ubuntu 24.04.3 LTS, aarch64, 2 CPUs, 1828 MB RAM
+
+$ docker --version
+Docker version 29.9.2, build a82e528
+
+$ docker compose version
+Docker Compose version v5.6.1
+
+$ aws --version
+aws-cli/2.38.5 Python/3.14.8 Linux/6.8.0-86-generic exe/aarch64.ubuntu.24
+
+$ sam --version
+SAM CLI, version 1.170.0
+
+$ go version
+go version go1.27.3 linux/arm64
+
+$ terraform version
+Terraform v1.17.0
+on linux_arm64
+
+
+$ make --version | head -1
+GNU Make 4.3
+
+$ zip -v | sed -n 2p
+This is Zip 3.0 (July 5th 2008), by Info-ZIP.
+
+$ uname -m
+aarch64

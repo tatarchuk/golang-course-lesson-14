@@ -1,0 +1,124 @@
+# Lesson 12 (Go Serverless): the course VM for the Lambda homework (DockerGoGroup: Docker CE, Go,
+# Terraform, AWS CLI v2, SAM CLI). Run Vagrant from this folder; the repository root has the separate
+# Lesson 10 DevOps VM. Changes from the course Vagrantfile, each needed on Apple Silicon (VirtualBox
+# runs arm64 guests only) or by the demo:
+# - the macOS 27 port-probe workaround: Vagrant 2.4.9 reports every host port, even SSH's 2222, as
+#   taken and `vagrant up` stops with ForwardPortCollision (see the required file);
+# - Go, the AWS CLI and the SAM CLI are downloaded for the guest's architecture, not for x86_64 only;
+# - zip (the demo's build script packs the Lambda with it) and make are installed explicitly;
+# - go and gofmt are linked into /usr/local/bin: /etc/profile.d is read by login shells only, so
+#   `vagrant ssh -c` commands would not find Go;
+# - port 4566 (Floci) is forwarded to the Mac's loopback interface for the Floci web UI;
+# - comments and messages are in English, and the file uses LF line endings (the course file has CRLF).
+require_relative "../deploy/vagrant/port_check_fix"
+
+Vagrant.configure("2") do |config|
+  # The official Ubuntu 24.04 image from Bento
+  config.vm.box = "bento/ubuntu-24.04"
+
+  # VirtualBox settings
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "DockerGoGroup"
+    vb.memory = "2048"
+    vb.cpus = 2
+  end
+
+  # Mac 127.0.0.1:4566 -> Floci in the VM (web UI at http://localhost:4566/_floci/ui)
+  config.vm.network "forwarded_port", guest: 4566, host: 4566, host_ip: "127.0.0.1"
+
+  # Provisioning
+  config.vm.provision "shell", inline: <<-SHELL
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Refresh the package lists
+    apt-get update -y
+
+    # Required packages
+    apt-get install -y \
+      apt-transport-https \
+      ca-certificates \
+      curl \
+      gnupg \
+      lsb-release \
+      software-properties-common \
+      unzip \
+      zip \
+      make
+
+    echo "=== Installing Docker CE ==="
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+      https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    usermod -aG docker vagrant
+    systemctl enable --now docker
+
+    echo "=== Installing Python pip and venv ==="
+    apt-get install -y python3-pip python3-venv
+
+    echo "=== Installing Go ==="
+    GO_VERSION="1.27.3"
+    GO_TARBALL="go${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz"
+    curl -fLO "https://go.dev/dl/${GO_TARBALL}"
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf "${GO_TARBALL}"
+    rm "${GO_TARBALL}"
+    ln -sf /usr/local/go/bin/go /usr/local/go/bin/gofmt /usr/local/bin/
+
+    # PATH for all users
+    cat > /etc/profile.d/golang.sh << 'EOF'
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=/home/vagrant/go
+export PATH=$PATH:$GOPATH/bin
+EOF
+    chmod +x /etc/profile.d/golang.sh
+
+    # For the current shell
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=/home/vagrant/go
+    export PATH=$PATH:$GOPATH/bin
+
+    echo "=== Installing Terraform ==="
+    rm -f /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | \
+      gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg > /dev/null
+    chmod a+r /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+      https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
+      tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+    apt-get update -y
+    apt-get install -y terraform
+
+    echo "=== Setup AWS CLI ==="
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+    unzip -q awscliv2.zip
+    ./aws/install
+    rm -rf awscliv2.zip ./aws
+
+    # Create the local-dev profile non-interactively
+    aws configure set aws_access_key_id "mock_key" --profile local-dev
+    aws configure set aws_secret_access_key "mock_secret" --profile local-dev
+    aws configure set region "us-east-1" --profile local-dev
+    aws configure set output "json" --profile local-dev
+
+    echo "=== Setup SAM CLI ==="
+    curl -L "https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/').zip" -o "aws-sam-cli.zip"
+    unzip -q aws-sam-cli.zip -d sam-installation
+    ./sam-installation/install
+    rm -rf aws-sam-cli.zip ./sam-installation
+
+    echo "=== Version check ==="
+    docker --version
+    aws --version
+    sam --version
+    python3 --version
+    pip3 --version
+    go version
+    terraform version
+  SHELL
+end

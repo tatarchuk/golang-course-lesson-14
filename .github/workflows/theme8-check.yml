@@ -125,7 +125,8 @@ jobs:
           errnotfound_once() { [ "$(grep -rn 'ErrNotFound = ' --include=*.go . | wc -l)" = "1" ]; }
           check "ErrNotFound is declared exactly once" errnotfound_once
 
-          ascii_only() { ! grep -rnP '[^\x00-\x7F]' --include=*.go .; }
+          # serverless/libratrack-lambda-demo is the course demo kept verbatim; its comments are Ukrainian.
+          ascii_only() { ! grep -rnP '[^\x00-\x7F]' --include=*.go --exclude-dir=libratrack-lambda-demo .; }
           check "No non-ASCII characters in .go files" ascii_only
 
           n1_fixed() { grep -rq 'Preload("Artists")' internal/repository && ! grep -rn 'NAIVE' internal; }
