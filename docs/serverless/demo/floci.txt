@@ -1,0 +1,108 @@
+$ make up
+scripts/up.sh
+▶ Запускаю Floci…
+ Network libratrack-lambda-demo_default Creating 
+ Network libratrack-lambda-demo_default Creating 
+ Volume libratrack-lambda-demo_floci-data Creating 
+ Volume libratrack-lambda-demo_floci-data Creating 
+ Volume libratrack-lambda-demo_floci-data Created 
+ Volume libratrack-lambda-demo_floci-data Created 
+ Network libratrack-lambda-demo_default Created 
+ Network libratrack-lambda-demo_default Created 
+ Container floci Creating 
+ Container floci Created 
+ Container floci Starting 
+ Container floci Started 
+▶ Чекаю на http://localhost:4566  ✓
+▶ Завантажую образ середовища Lambda (provided.al2023)…
+  ✓ готово
+
+$ make deploy-cli
+scripts/build.sh
+▶ Збірка під linux/arm64 (Lambda architecture: arm64)
+  ✓ build/webhook.zip  (2.7M)
+  ✓ build/thumbnail.zip  (3.5M)
+scripts/deploy-cli.sh
+▶ S3-бакети
+  ✓ libratrack-covers
+  ✓ libratrack-thumbnails
+▶ IAM-роль (мінімальні права — слайди 32–33)
+  ✓ arn:aws:iam::000000000000:role/libratrack-lambda-role
+▶ Lambda-функції (provided.al2023, arm64)
+  ✓ libratrack-webhook (створено)
+  ✓ libratrack-thumbnail (створено)
+▶ API Gateway (REST, Lambda proxy)
+  ✓ API id: 471730af26
+▶ Тригер S3 → Lambda (best effort)
+  ✓ нотифікацію налаштовано
+
+✅ Готово. Webhook:
+   curl -X POST http://localhost:4566/restapis/471730af26/dev/_user_request_/webhook -d @events/payload_valid.json
+exit=0
+
+=================== manual calls (demo README, step 2C)
+
+$ awsf lambda invoke --function-name libratrack-webhook --payload fileb://events/valid.json --cli-binary-format raw-in-base64-out /tmp/out.json
+{
+    "StatusCode": 200,
+    "ExecutedVersion": "$LATEST"
+}
+
+$ cat /tmp/out.json
+{"statusCode":200,"headers":{"Content-Type":"application/json","X-Request-Id":"97a219cb-7e96-4db4-8b5f-16db60d0ee9f"},"multiValueHeaders":null,"body":"{\"donation\":{\"title\":\"The Go Programming Language\",\"author\":\"Alan Donovan, Brian Kernighan\",\"isbn\":\"9780134190440\",\"condition\":\"good\",\"donor_email\":\"reader@example.com\"},\"status\":\"processed\"}"}
+
+$ curl -s -i -X POST http://localhost:4566/restapis/471730af26/dev/_user_request_/webhook -d @events/payload_valid.json
+HTTP/1.1 200 OK
+content-length: 191
+Content-Type: application/json
+Date: Fri, 23 Oct 2026 09:25:03 GMT
+x-amz-apigw-id: 58b48a7c-6164-4432-835d-4d373f9513b9
+x-amz-id-2: 4b5c99d3-2767-4c23-bfeb-51dbd62db2e3
+x-amz-request-id: 4b5c99d3-2767-4c23-bfeb-51dbd62db2e3
+x-amzn-RequestId: a0842c4c-622f-44d1-9af4-5951155185ce
+X-Request-Id: 992f4c6e-ccf6-43a6-a95e-d5b0cd9bddf9
+
+{"donation":{"title":"The Go Programming Language","author":"Alan Donovan, Brian Kernighan","isbn":"9780134190440","condition":"good","donor_email":"reader@example.com"},"status":"processed"}
+
+$ curl -s -i -X POST http://localhost:4566/restapis/471730af26/dev/_user_request_/webhook -d @events/payload_malformed.json
+HTTP/1.1 400 Bad Request
+content-length: 24
+Content-Type: application/json
+Date: Fri, 23 Oct 2026 09:25:03 GMT
+x-amz-apigw-id: d47bbb17-7a14-4ce2-ac73-4e41e30c380f
+x-amz-id-2: d7ba6e7f-3af5-44f9-8652-666e9d81f263
+x-amz-request-id: d7ba6e7f-3af5-44f9-8652-666e9d81f263
+x-amzn-RequestId: 4c2f8280-6543-4967-ad68-f732e93e3968
+X-Request-Id: 99466b27-8aae-4fc9-bcf0-7fdbcc037176
+
+{"error":"invalid json"}
+
+=================== S3 trigger
+
+$ awsf s3 cp testdata/cover.png s3://libratrack-covers/covers/cover.png
+Completed 6.8 KiB/6.8 KiB (935.0 KiB/s) with 1 file(s) remainingupload: testdata/cover.png to s3://libratrack-covers/covers/cover.png
+(thumbnail present after ~1s of polling)
+
+$ awsf s3 ls s3://libratrack-thumbnails/thumbs/covers/
+2026-10-23 09:25:03       2420 cover.png
+
+$ awsf s3 cp s3://libratrack-thumbnails/thumbs/covers/cover.png ./thumb.png
+Completed 2.4 KiB/2.4 KiB (1.5 MiB/s) with 1 file(s) remainingdownload: s3://libratrack-thumbnails/thumbs/covers/cover.png to ./thumb.png
+
+$ file thumb.png
+thumb.png: PNG image data, 133 x 200, 8-bit/color RGBA, non-interlaced
+
+=================== Lambda containers started by Floci
+
+$ docker ps --filter name=libratrack --format table {{.Names}}\t{{.Image}}\t{{.Status}}
+NAMES                                     IMAGE          STATUS
+floci-aws-libratrack-thumbnail-4d1cfaaf   612c98f126c2   Up 1 second
+floci-aws-libratrack-webhook-c5c11394     612c98f126c2   Up 1 second
+
+$ docker logs 9edeb1dc0950   # /floci-aws-libratrack-thumbnail-4d1cfaaf
+{"time":"2026-10-23T09:25:03.617322251Z","level":"INFO","msg":"thumbnail created","source":"libratrack-covers/covers/cover.png","target":"libratrack-thumbnails/thumbs/covers/cover.png","format":"png","from":"600x900","to":"133x200"}
+
+$ docker logs 541a2b65eb08   # /floci-aws-libratrack-webhook-c5c11394
+{"time":"2026-10-23T09:25:03.002302895Z","level":"INFO","msg":"donation processed","request_id":"97a219cb-7e96-4db4-8b5f-16db60d0ee9f","isbn":"9780134190440"}
+{"time":"2026-10-23T09:25:03.059778577Z","level":"INFO","msg":"donation processed","request_id":"992f4c6e-ccf6-43a6-a95e-d5b0cd9bddf9","isbn":"9780134190440"}
+{"time":"2026-10-23T09:25:03.064768237Z","level":"WARN","msg":"invalid json","request_id":"99466b27-8aae-4fc9-bcf0-7fdbcc037176","error":"unexpected end of JSON input"}

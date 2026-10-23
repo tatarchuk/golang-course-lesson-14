@@ -1,0 +1,116 @@
+$ make sam-invoke
+sam build -t sam/template.yaml
+
+	SAM CLI now collects telemetry to better understand customer needs.
+
+	You can OPT OUT and disable telemetry collection by setting the
+	environment variable SAM_CLI_TELEMETRY=0 in your shell.
+	Thanks for your help!
+
+	Learn More: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-telemetry.html
+
+Building codeuri: /vagrant/libratrack-lambda-demo runtime: provided.al2023 architecture: arm64 functions: WebhookFunction
+WebhookFunction: Running CustomMakeBuilder:CopySource
+WebhookFunction: Running CustomMakeBuilder:MakeBuild
+WebhookFunction: Current Artifacts Directory : /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction
+make[1]: Entering directory '/tmp/tmpu01t97vd'
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -ldflags="-s -w" -o /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction/bootstrap ./cmd/webhook
+make[1]: Leaving directory '/tmp/tmpu01t97vd'
+Building codeuri: /vagrant/libratrack-lambda-demo runtime: provided.al2023 architecture: arm64 functions: ThumbnailFunction
+ThumbnailFunction: Running CustomMakeBuilder:CopySource
+ThumbnailFunction: Running CustomMakeBuilder:MakeBuild
+ThumbnailFunction: Current Artifacts Directory : /vagrant/libratrack-lambda-demo/.aws-sam/build/ThumbnailFunction
+make[1]: Entering directory '/tmp/tmpea7im588'
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -ldflags="-s -w" -o /vagrant/libratrack-lambda-demo/.aws-sam/build/ThumbnailFunction/bootstrap ./cmd/thumbnail
+make[1]: Leaving directory '/tmp/tmpea7im588'
+
+Build Succeeded
+
+Built Artifacts  : .aws-sam/build
+Built Template   : .aws-sam/build/template.yaml
+
+Commands you can use next
+=========================
+[*] Validate SAM template: sam validate
+[*] Invoke Function: sam local invoke
+[*] Test Function in the Cloud: sam sync --stack-name {{stack-name}} --watch
+[*] Deploy: sam deploy --guided
+sam local invoke WebhookFunction -e events/valid.json
+No current session found, using default AWS::AccountId
+Invoking bootstrap (provided.al2023)
+Local image was not found.
+Removing rapid images for repo public.ecr.aws/sam/emulation-provided.al2023
+Building image.................................................................................................................................................
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+
+Mounting /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: b32729361ddf089726a4c9770ef48e9d916c9c7fa7ffbfeda2fc53e461d761cc
+START RequestId: 0c43e0bb-1021-4b5c-aee7-d91714e84862 Version: $LATEST
+{"time":"2026-10-23T08:06:55.060403034Z","level":"INFO","msg":"donation processed","request_id":"0c43e0bb-1021-4b5c-aee7-d91714e84862","isbn":"9780134190440"}
+END RequestId: 0c43e0bb-1021-4b5c-aee7-d91714e84862
+REPORT RequestId: 0c43e0bb-1021-4b5c-aee7-d91714e84862	Init Duration: 0.07 ms	Duration: 62.97 ms	Billed Duration: 63 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+{"statusCode": 200, "headers": {"Content-Type": "application/json", "X-Request-Id": "0c43e0bb-1021-4b5c-aee7-d91714e84862"}, "multiValueHeaders": null, "body": "{\"donation\":{\"title\":\"The Go Programming Language\",\"author\":\"Alan Donovan, Brian Kernighan\",\"isbn\":\"9780134190440\",\"condition\":\"good\",\"donor_email\":\"reader@example.com\"},\"status\":\"processed\"}"}
+sam local invoke WebhookFunction -e events/invalid.json
+No current session found, using default AWS::AccountId
+Invoking bootstrap (provided.al2023)
+Local image is up-to-date
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+
+Mounting /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: b045bca5911c466520a6ae929f6826f8362eba7a88b88c00c983ea5cf9a87eee
+START RequestId: 0ea8767d-9501-4cfc-8021-a6640a39139a Version: $LATEST
+{"time":"2026-10-23T08:06:58.359401411Z","level":"WARN","msg":"invalid json","request_id":"0ea8767d-9501-4cfc-8021-a6640a39139a","error":"unexpected end of JSON input"}
+END RequestId: 0ea8767d-9501-4cfc-8021-a6640a39139a
+REPORT RequestId: 0ea8767d-9501-4cfc-8021-a6640a39139a	Init Duration: 0.02 ms	Duration: 2.59 ms	Billed Duration: 3 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+{"statusCode": 400, "headers": {"Content-Type": "application/json", "X-Request-Id": "0ea8767d-9501-4cfc-8021-a6640a39139a"}, "multiValueHeaders": null, "body": "{\"error\":\"invalid json\"}"}
+
+=================== sam local start-api
+$ sam local start-api    # in the background, http://127.0.0.1:3000
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d @events/payload_valid.json
+{"donation":{"title":"The Go Programming Language","author":"Alan Donovan, Brian Kernighan","isbn":"9780134190440","condition":"good","donor_email":"reader@example.com"},"status":"processed"}
+HTTP 200, 2.756278s
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d @events/payload_malformed.json
+{"error":"invalid json"}
+HTTP 400, 0.316434s
+
+$ curl -X POST http://127.0.0.1:3000/webhook -d '{"event":"push","data":{}}'   # slide 20
+{"error":"unsupported event","event":"push"}
+HTTP 400, 0.201610s
+
+--- sam local start-api log
+No current session found, using default AWS::AccountId
+Mounting WebhookFunction at http://127.0.0.1:3000/webhook [POST]
+You can now browse to the above endpoints to invoke your functions. You do not need to restart/reload SAM CLI while working on your functions, changes will be reflected instantly/automatically. If you used sam build before running local commands, you will need to re-run sam build for the changes to be picked up. You only need to restart SAM CLI if you update your AWS SAM template
+2026-10-23 08:07:31 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:3000
+2026-10-23 08:07:31 Press CTRL+C to quit
+2026-10-23 08:07:32 127.0.0.1 - - [23/Oct/2026 08:07:32] "GET / HTTP/1.1" 403 -
+Invoking bootstrap (provided.al2023)
+Local image is up-to-date
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+Mounting /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: fa38a4d0294658d805691844fc1733f190a9e3f3581448cb5e7939b63634e5b2
+START RequestId: cfc133b5-87de-40c0-ae3b-2051b1c87162 Version: $LATEST
+{"time":"2026-10-23T08:07:33.885085761Z","level":"INFO","msg":"donation processed","request_id":"cfc133b5-87de-40c0-ae3b-2051b1c87162","isbn":"9780134190440"}
+END RequestId: cfc133b5-87de-40c0-ae3b-2051b1c87162
+REPORT RequestId: cfc133b5-87de-40c0-ae3b-2051b1c87162	Init Duration: 0.05 ms	Duration: 2.59 ms	Billed Duration: 3 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+2026-10-23 08:07:35 127.0.0.1 - - [23/Oct/2026 08:07:35] "POST /webhook HTTP/1.1" 200 -
+Invoking bootstrap (provided.al2023)
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+Mounting /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: 4f2a402f153b44ad093c8fec483d0520ace1f04c3f3a48f3df762efec77b9201
+START RequestId: a004b88f-5fbf-4351-8d2a-0104865f2652 Version: $LATEST
+{"time":"2026-10-23T08:07:35.219617803Z","level":"WARN","msg":"invalid json","request_id":"a004b88f-5fbf-4351-8d2a-0104865f2652","error":"unexpected end of JSON input"}
+END RequestId: a004b88f-5fbf-4351-8d2a-0104865f2652
+REPORT RequestId: a004b88f-5fbf-4351-8d2a-0104865f2652	Init Duration: 0.10 ms	Duration: 3.56 ms	Billed Duration: 4 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+2026-10-23 08:07:35 127.0.0.1 - - [23/Oct/2026 08:07:35] "POST /webhook HTTP/1.1" 400 -
+Invoking bootstrap (provided.al2023)
+Using local image: public.ecr.aws/lambda/provided:al2023-rapid-arm64.
+Mounting /vagrant/libratrack-lambda-demo/.aws-sam/build/WebhookFunction as /var/task:ro,delegated, inside runtime container
+SAM_CONTAINER_ID: 2ec1166f4b2df6066be8ff3a8e12badd3fb434beb9faaab9554f05b6c27d81e8
+{"time":"2026-10-23T08:07:35.442426054Z","level":"WARN","msg":"unsupported event","request_id":"26ce2572-3366-4613-b970-d5fd09f1a130","event":"push"}
+END RequestId: 26ce2572-3366-4613-b970-d5fd09f1a130
+REPORT RequestId: 26ce2572-3366-4613-b970-d5fd09f1a130	Init Duration: 0.03 ms	Duration: 1.89 ms	Billed Duration: 2 ms	Memory Size: 256 MB	Max Memory Used: 256 MB	
+2026-10-23 08:07:35 127.0.0.1 - - [23/Oct/2026 08:07:35] "POST /webhook HTTP/1.1" 400 -

@@ -1,0 +1,914 @@
+$ make cleanup
+scripts/cleanup.sh
+▶ API Gateway
+  ✓ 471730af26
+▶ Lambda
+  ✓ libratrack-webhook
+  ✓ libratrack-thumbnail
+▶ S3
+  ✓ libratrack-covers
+  ✓ libratrack-thumbnails
+▶ IAM
+  ✓ libratrack-lambda-role
+✅ Очищено
+
+$ make plan-tf
+scripts/build.sh
+▶ Збірка під linux/arm64 (Lambda architecture: arm64)
+  ✓ build/webhook.zip  (2.7M)
+  ✓ build/thumbnail.zip  (3.5M)
+scripts/deploy-tf.sh plan
+Initializing the backend...
+
+Initializing provider plugins...
+- Finding hashicorp/aws versions matching "~> 6.0"...
+- Installing hashicorp/aws v6.70.0...
+- Installed hashicorp/aws v6.70.0 (signed by HashiCorp)
+
+Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+Success! The configuration is valid.
+
+data.aws_iam_policy_document.assume: Reading...
+data.aws_iam_policy_document.assume: Read complete after 0s [id=2690255455]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # data.aws_iam_policy_document.lambda_permissions will be read during apply
+  # (config refers to values not yet known)
+ <= data "aws_iam_policy_document" "lambda_permissions" {
+      + id            = (known after apply)
+      + json          = (known after apply)
+      + minified_json = (known after apply)
+
+      + statement {
+          + actions   = [
+              + "logs:CreateLogGroup",
+              + "logs:CreateLogStream",
+              + "logs:PutLogEvents",
+            ]
+          + resources = [
+              + "arn:aws:logs:*:*:log-group:/aws/lambda/libratrack-*:*",
+            ]
+          + sid       = "Logs"
+        }
+      + statement {
+          + actions   = [
+              + "s3:GetObject",
+            ]
+          + resources = [
+              + (known after apply),
+            ]
+          + sid       = "ReadCovers"
+        }
+      + statement {
+          + actions   = [
+              + "s3:PutObject",
+            ]
+          + resources = [
+              + (known after apply),
+            ]
+          + sid       = "WriteThumbnails"
+        }
+    }
+
+  # aws_api_gateway_deployment.api will be created
+  + resource "aws_api_gateway_deployment" "api" {
+      + created_date = (known after apply)
+      + id           = (known after apply)
+      + region       = "us-east-1"
+      + rest_api_id  = (known after apply)
+      + triggers     = (known after apply)
+    }
+
+  # aws_api_gateway_integration.webhook will be created
+  + resource "aws_api_gateway_integration" "webhook" {
+      + cache_namespace         = (known after apply)
+      + connection_type         = "INTERNET"
+      + http_method             = "POST"
+      + id                      = (known after apply)
+      + integration_http_method = "POST"
+      + passthrough_behavior    = (known after apply)
+      + region                  = "us-east-1"
+      + resource_id             = (known after apply)
+      + response_transfer_mode  = (known after apply)
+      + rest_api_id             = (known after apply)
+      + timeout_milliseconds    = 29000
+      + type                    = "AWS_PROXY"
+      + uri                     = (known after apply)
+    }
+
+  # aws_api_gateway_method.webhook_post will be created
+  + resource "aws_api_gateway_method" "webhook_post" {
+      + api_key_required = false
+      + authorization    = "NONE"
+      + http_method      = "POST"
+      + id               = (known after apply)
+      + region           = "us-east-1"
+      + resource_id      = (known after apply)
+      + rest_api_id      = (known after apply)
+    }
+
+  # aws_api_gateway_resource.webhook will be created
+  + resource "aws_api_gateway_resource" "webhook" {
+      + id          = (known after apply)
+      + parent_id   = (known after apply)
+      + path        = (known after apply)
+      + path_part   = "webhook"
+      + region      = "us-east-1"
+      + rest_api_id = (known after apply)
+    }
+
+  # aws_api_gateway_rest_api.api will be created
+  + resource "aws_api_gateway_rest_api" "api" {
+      + api_key_source               = (known after apply)
+      + arn                          = (known after apply)
+      + binary_media_types           = (known after apply)
+      + created_date                 = (known after apply)
+      + description                  = (known after apply)
+      + disable_execute_api_endpoint = (known after apply)
+      + execution_arn                = (known after apply)
+      + id                           = (known after apply)
+      + minimum_compression_size     = (known after apply)
+      + name                         = "libratrack-api"
+      + policy                       = (known after apply)
+      + region                       = "us-east-1"
+      + root_resource_id             = (known after apply)
+      + security_policy              = (known after apply)
+      + tags_all                     = (known after apply)
+
+      + endpoint_configuration (known after apply)
+    }
+
+  # aws_api_gateway_stage.stage will be created
+  + resource "aws_api_gateway_stage" "stage" {
+      + arn           = (known after apply)
+      + deployment_id = (known after apply)
+      + execution_arn = (known after apply)
+      + id            = (known after apply)
+      + invoke_url    = (known after apply)
+      + region        = "us-east-1"
+      + rest_api_id   = (known after apply)
+      + stage_name    = "dev"
+      + tags_all      = (known after apply)
+      + web_acl_arn   = (known after apply)
+    }
+
+  # aws_iam_role.lambda_exec will be created
+  + resource "aws_iam_role" "lambda_exec" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "lambda.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "libratrack-lambda-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags_all              = (known after apply)
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # aws_iam_role_policy.lambda_permissions will be created
+  + resource "aws_iam_role_policy" "lambda_permissions" {
+      + id          = (known after apply)
+      + name        = "libratrack-minimal"
+      + name_prefix = (known after apply)
+      + policy      = (known after apply)
+      + role        = (known after apply)
+    }
+
+  # aws_lambda_function.thumbnail will be created
+  + resource "aws_lambda_function" "thumbnail" {
+      + architectures                  = [
+          + "arm64",
+        ]
+      + arn                            = (known after apply)
+      + code_sha256                    = (known after apply)
+      + filename                       = "./../build/thumbnail.zip"
+      + function_name                  = "libratrack-thumbnail"
+      + handler                        = "bootstrap"
+      + id                             = (known after apply)
+      + invoke_arn                     = (known after apply)
+      + last_modified                  = (known after apply)
+      + memory_size                    = 512
+      + package_type                   = "Zip"
+      + publish                        = false
+      + qualified_arn                  = (known after apply)
+      + qualified_invoke_arn           = (known after apply)
+      + region                         = "us-east-1"
+      + reserved_concurrent_executions = -1
+      + response_streaming_invoke_arn  = (known after apply)
+      + role                           = (known after apply)
+      + runtime                        = "provided.al2023"
+      + signing_job_arn                = (known after apply)
+      + signing_profile_version_arn    = (known after apply)
+      + skip_destroy                   = false
+      + source_code_hash               = "BHpUgpSpFAWJvlXJBxB0Px792vl8/zyGSecb/rBSG3s="
+      + source_code_size               = (known after apply)
+      + tags_all                       = (known after apply)
+      + timeout                        = 30
+      + version                        = (known after apply)
+
+      + environment {
+          + variables = {
+              + "OUTPUT_BUCKET" = "libratrack-thumbnails"
+            }
+        }
+
+      + ephemeral_storage (known after apply)
+
+      + logging_config (known after apply)
+
+      + tracing_config (known after apply)
+    }
+
+  # aws_lambda_function.webhook will be created
+  + resource "aws_lambda_function" "webhook" {
+      + architectures                  = [
+          + "arm64",
+        ]
+      + arn                            = (known after apply)
+      + code_sha256                    = (known after apply)
+      + filename                       = "./../build/webhook.zip"
+      + function_name                  = "libratrack-webhook"
+      + handler                        = "bootstrap"
+      + id                             = (known after apply)
+      + invoke_arn                     = (known after apply)
+      + last_modified                  = (known after apply)
+      + memory_size                    = 256
+      + package_type                   = "Zip"
+      + publish                        = false
+      + qualified_arn                  = (known after apply)
+      + qualified_invoke_arn           = (known after apply)
+      + region                         = "us-east-1"
+      + reserved_concurrent_executions = -1
+      + response_streaming_invoke_arn  = (known after apply)
+      + role                           = (known after apply)
+      + runtime                        = "provided.al2023"
+      + signing_job_arn                = (known after apply)
+      + signing_profile_version_arn    = (known after apply)
+      + skip_destroy                   = false
+      + source_code_hash               = "jhlK+8pQVTb6Gi6bTFs3dtwQVSPvfGzaLcGVt4/8d6U="
+      + source_code_size               = (known after apply)
+      + tags_all                       = (known after apply)
+      + timeout                        = 10
+      + version                        = (known after apply)
+
+      + ephemeral_storage (known after apply)
+
+      + logging_config (known after apply)
+
+      + tracing_config (known after apply)
+    }
+
+  # aws_lambda_permission.apigw_webhook will be created
+  + resource "aws_lambda_permission" "apigw_webhook" {
+      + action              = "lambda:InvokeFunction"
+      + function_name       = "libratrack-webhook"
+      + id                  = (known after apply)
+      + principal           = "apigateway.amazonaws.com"
+      + region              = "us-east-1"
+      + source_arn          = (known after apply)
+      + statement_id        = "AllowAPIGatewayInvoke"
+      + statement_id_prefix = (known after apply)
+    }
+
+  # aws_lambda_permission.s3_thumbnail will be created
+  + resource "aws_lambda_permission" "s3_thumbnail" {
+      + action              = "lambda:InvokeFunction"
+      + function_name       = "libratrack-thumbnail"
+      + id                  = (known after apply)
+      + principal           = "s3.amazonaws.com"
+      + region              = "us-east-1"
+      + source_arn          = (known after apply)
+      + statement_id        = "AllowS3Invoke"
+      + statement_id_prefix = (known after apply)
+    }
+
+  # aws_s3_bucket.covers will be created
+  + resource "aws_s3_bucket" "covers" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "libratrack-covers"
+      + bucket_domain_name          = (known after apply)
+      + bucket_namespace            = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_region               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = true
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = "us-east-1"
+      + request_payer               = (known after apply)
+      + tags_all                    = (known after apply)
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+
+      + cors_rule (known after apply)
+
+      + grant (known after apply)
+
+      + lifecycle_rule (known after apply)
+
+      + logging (known after apply)
+
+      + object_lock_configuration (known after apply)
+
+      + replication_configuration (known after apply)
+
+      + server_side_encryption_configuration (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # aws_s3_bucket.thumbnails will be created
+  + resource "aws_s3_bucket" "thumbnails" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "libratrack-thumbnails"
+      + bucket_domain_name          = (known after apply)
+      + bucket_namespace            = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_region               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = true
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = "us-east-1"
+      + request_payer               = (known after apply)
+      + tags_all                    = (known after apply)
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+
+      + cors_rule (known after apply)
+
+      + grant (known after apply)
+
+      + lifecycle_rule (known after apply)
+
+      + logging (known after apply)
+
+      + object_lock_configuration (known after apply)
+
+      + replication_configuration (known after apply)
+
+      + server_side_encryption_configuration (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # aws_s3_bucket_notification.covers will be created
+  + resource "aws_s3_bucket_notification" "covers" {
+      + bucket      = (known after apply)
+      + eventbridge = false
+      + id          = (known after apply)
+      + region      = "us-east-1"
+
+      + lambda_function {
+          + events              = [
+              + "s3:ObjectCreated:*",
+            ]
+          + id                  = (known after apply)
+          + lambda_function_arn = (known after apply)
+        }
+    }
+
+Plan: 15 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + api_id            = (known after apply)
+  + try_it            = (known after apply)
+  + webhook_url_floci = (known after apply)
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
+
+ℹ️  Це лише plan. Прочитайте його, потім: scripts/deploy-tf.sh apply
+exit=0
+
+$ make deploy-tf
+scripts/build.sh
+▶ Збірка під linux/arm64 (Lambda architecture: arm64)
+  ✓ build/webhook.zip  (2.7M)
+  ✓ build/thumbnail.zip  (3.5M)
+scripts/deploy-tf.sh apply
+Initializing the backend...
+
+Initializing provider plugins...
+- Reusing version 6.70.0 of hashicorp/aws from the dependency lock file
+- Using previously-installed hashicorp/aws v6.70.0
+
+Terraform has been successfully initialized!
+
+You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+Success! The configuration is valid.
+
+data.aws_iam_policy_document.assume: Reading...
+data.aws_iam_policy_document.assume: Read complete after 0s [id=2690255455]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # data.aws_iam_policy_document.lambda_permissions will be read during apply
+  # (config refers to values not yet known)
+ <= data "aws_iam_policy_document" "lambda_permissions" {
+      + id            = (known after apply)
+      + json          = (known after apply)
+      + minified_json = (known after apply)
+
+      + statement {
+          + actions   = [
+              + "logs:CreateLogGroup",
+              + "logs:CreateLogStream",
+              + "logs:PutLogEvents",
+            ]
+          + resources = [
+              + "arn:aws:logs:*:*:log-group:/aws/lambda/libratrack-*:*",
+            ]
+          + sid       = "Logs"
+        }
+      + statement {
+          + actions   = [
+              + "s3:GetObject",
+            ]
+          + resources = [
+              + (known after apply),
+            ]
+          + sid       = "ReadCovers"
+        }
+      + statement {
+          + actions   = [
+              + "s3:PutObject",
+            ]
+          + resources = [
+              + (known after apply),
+            ]
+          + sid       = "WriteThumbnails"
+        }
+    }
+
+  # aws_api_gateway_deployment.api will be created
+  + resource "aws_api_gateway_deployment" "api" {
+      + created_date = (known after apply)
+      + id           = (known after apply)
+      + region       = "us-east-1"
+      + rest_api_id  = (known after apply)
+      + triggers     = (known after apply)
+    }
+
+  # aws_api_gateway_integration.webhook will be created
+  + resource "aws_api_gateway_integration" "webhook" {
+      + cache_namespace         = (known after apply)
+      + connection_type         = "INTERNET"
+      + http_method             = "POST"
+      + id                      = (known after apply)
+      + integration_http_method = "POST"
+      + passthrough_behavior    = (known after apply)
+      + region                  = "us-east-1"
+      + resource_id             = (known after apply)
+      + response_transfer_mode  = (known after apply)
+      + rest_api_id             = (known after apply)
+      + timeout_milliseconds    = 29000
+      + type                    = "AWS_PROXY"
+      + uri                     = (known after apply)
+    }
+
+  # aws_api_gateway_method.webhook_post will be created
+  + resource "aws_api_gateway_method" "webhook_post" {
+      + api_key_required = false
+      + authorization    = "NONE"
+      + http_method      = "POST"
+      + id               = (known after apply)
+      + region           = "us-east-1"
+      + resource_id      = (known after apply)
+      + rest_api_id      = (known after apply)
+    }
+
+  # aws_api_gateway_resource.webhook will be created
+  + resource "aws_api_gateway_resource" "webhook" {
+      + id          = (known after apply)
+      + parent_id   = (known after apply)
+      + path        = (known after apply)
+      + path_part   = "webhook"
+      + region      = "us-east-1"
+      + rest_api_id = (known after apply)
+    }
+
+  # aws_api_gateway_rest_api.api will be created
+  + resource "aws_api_gateway_rest_api" "api" {
+      + api_key_source               = (known after apply)
+      + arn                          = (known after apply)
+      + binary_media_types           = (known after apply)
+      + created_date                 = (known after apply)
+      + description                  = (known after apply)
+      + disable_execute_api_endpoint = (known after apply)
+      + execution_arn                = (known after apply)
+      + id                           = (known after apply)
+      + minimum_compression_size     = (known after apply)
+      + name                         = "libratrack-api"
+      + policy                       = (known after apply)
+      + region                       = "us-east-1"
+      + root_resource_id             = (known after apply)
+      + security_policy              = (known after apply)
+      + tags_all                     = (known after apply)
+
+      + endpoint_configuration (known after apply)
+    }
+
+  # aws_api_gateway_stage.stage will be created
+  + resource "aws_api_gateway_stage" "stage" {
+      + arn           = (known after apply)
+      + deployment_id = (known after apply)
+      + execution_arn = (known after apply)
+      + id            = (known after apply)
+      + invoke_url    = (known after apply)
+      + region        = "us-east-1"
+      + rest_api_id   = (known after apply)
+      + stage_name    = "dev"
+      + tags_all      = (known after apply)
+      + web_acl_arn   = (known after apply)
+    }
+
+  # aws_iam_role.lambda_exec will be created
+  + resource "aws_iam_role" "lambda_exec" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "lambda.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "libratrack-lambda-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags_all              = (known after apply)
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # aws_iam_role_policy.lambda_permissions will be created
+  + resource "aws_iam_role_policy" "lambda_permissions" {
+      + id          = (known after apply)
+      + name        = "libratrack-minimal"
+      + name_prefix = (known after apply)
+      + policy      = (known after apply)
+      + role        = (known after apply)
+    }
+
+  # aws_lambda_function.thumbnail will be created
+  + resource "aws_lambda_function" "thumbnail" {
+      + architectures                  = [
+          + "arm64",
+        ]
+      + arn                            = (known after apply)
+      + code_sha256                    = (known after apply)
+      + filename                       = "./../build/thumbnail.zip"
+      + function_name                  = "libratrack-thumbnail"
+      + handler                        = "bootstrap"
+      + id                             = (known after apply)
+      + invoke_arn                     = (known after apply)
+      + last_modified                  = (known after apply)
+      + memory_size                    = 512
+      + package_type                   = "Zip"
+      + publish                        = false
+      + qualified_arn                  = (known after apply)
+      + qualified_invoke_arn           = (known after apply)
+      + region                         = "us-east-1"
+      + reserved_concurrent_executions = -1
+      + response_streaming_invoke_arn  = (known after apply)
+      + role                           = (known after apply)
+      + runtime                        = "provided.al2023"
+      + signing_job_arn                = (known after apply)
+      + signing_profile_version_arn    = (known after apply)
+      + skip_destroy                   = false
+      + source_code_hash               = "7D3a25FBoZ3hdndl6V+YCuov9IMKUsEpOZGGoqk1hcA="
+      + source_code_size               = (known after apply)
+      + tags_all                       = (known after apply)
+      + timeout                        = 30
+      + version                        = (known after apply)
+
+      + environment {
+          + variables = {
+              + "OUTPUT_BUCKET" = "libratrack-thumbnails"
+            }
+        }
+
+      + ephemeral_storage (known after apply)
+
+      + logging_config (known after apply)
+
+      + tracing_config (known after apply)
+    }
+
+  # aws_lambda_function.webhook will be created
+  + resource "aws_lambda_function" "webhook" {
+      + architectures                  = [
+          + "arm64",
+        ]
+      + arn                            = (known after apply)
+      + code_sha256                    = (known after apply)
+      + filename                       = "./../build/webhook.zip"
+      + function_name                  = "libratrack-webhook"
+      + handler                        = "bootstrap"
+      + id                             = (known after apply)
+      + invoke_arn                     = (known after apply)
+      + last_modified                  = (known after apply)
+      + memory_size                    = 256
+      + package_type                   = "Zip"
+      + publish                        = false
+      + qualified_arn                  = (known after apply)
+      + qualified_invoke_arn           = (known after apply)
+      + region                         = "us-east-1"
+      + reserved_concurrent_executions = -1
+      + response_streaming_invoke_arn  = (known after apply)
+      + role                           = (known after apply)
+      + runtime                        = "provided.al2023"
+      + signing_job_arn                = (known after apply)
+      + signing_profile_version_arn    = (known after apply)
+      + skip_destroy                   = false
+      + source_code_hash               = "NFfqws8zCeN9CihFx0ShlmP1jZQRcJ6fmBZrFHRc7iQ="
+      + source_code_size               = (known after apply)
+      + tags_all                       = (known after apply)
+      + timeout                        = 10
+      + version                        = (known after apply)
+
+      + ephemeral_storage (known after apply)
+
+      + logging_config (known after apply)
+
+      + tracing_config (known after apply)
+    }
+
+  # aws_lambda_permission.apigw_webhook will be created
+  + resource "aws_lambda_permission" "apigw_webhook" {
+      + action              = "lambda:InvokeFunction"
+      + function_name       = "libratrack-webhook"
+      + id                  = (known after apply)
+      + principal           = "apigateway.amazonaws.com"
+      + region              = "us-east-1"
+      + source_arn          = (known after apply)
+      + statement_id        = "AllowAPIGatewayInvoke"
+      + statement_id_prefix = (known after apply)
+    }
+
+  # aws_lambda_permission.s3_thumbnail will be created
+  + resource "aws_lambda_permission" "s3_thumbnail" {
+      + action              = "lambda:InvokeFunction"
+      + function_name       = "libratrack-thumbnail"
+      + id                  = (known after apply)
+      + principal           = "s3.amazonaws.com"
+      + region              = "us-east-1"
+      + source_arn          = (known after apply)
+      + statement_id        = "AllowS3Invoke"
+      + statement_id_prefix = (known after apply)
+    }
+
+  # aws_s3_bucket.covers will be created
+  + resource "aws_s3_bucket" "covers" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "libratrack-covers"
+      + bucket_domain_name          = (known after apply)
+      + bucket_namespace            = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_region               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = true
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = "us-east-1"
+      + request_payer               = (known after apply)
+      + tags_all                    = (known after apply)
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+
+      + cors_rule (known after apply)
+
+      + grant (known after apply)
+
+      + lifecycle_rule (known after apply)
+
+      + logging (known after apply)
+
+      + object_lock_configuration (known after apply)
+
+      + replication_configuration (known after apply)
+
+      + server_side_encryption_configuration (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # aws_s3_bucket.thumbnails will be created
+  + resource "aws_s3_bucket" "thumbnails" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "libratrack-thumbnails"
+      + bucket_domain_name          = (known after apply)
+      + bucket_namespace            = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_region               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = true
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = "us-east-1"
+      + request_payer               = (known after apply)
+      + tags_all                    = (known after apply)
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+
+      + cors_rule (known after apply)
+
+      + grant (known after apply)
+
+      + lifecycle_rule (known after apply)
+
+      + logging (known after apply)
+
+      + object_lock_configuration (known after apply)
+
+      + replication_configuration (known after apply)
+
+      + server_side_encryption_configuration (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+  # aws_s3_bucket_notification.covers will be created
+  + resource "aws_s3_bucket_notification" "covers" {
+      + bucket      = (known after apply)
+      + eventbridge = false
+      + id          = (known after apply)
+      + region      = "us-east-1"
+
+      + lambda_function {
+          + events              = [
+              + "s3:ObjectCreated:*",
+            ]
+          + id                  = (known after apply)
+          + lambda_function_arn = (known after apply)
+        }
+    }
+
+Plan: 15 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + api_id            = (known after apply)
+  + try_it            = (known after apply)
+  + webhook_url_floci = (known after apply)
+aws_iam_role.lambda_exec: Creating...
+aws_s3_bucket.thumbnails: Creating...
+aws_api_gateway_rest_api.api: Creating...
+aws_s3_bucket.covers: Creating...
+aws_api_gateway_rest_api.api: Creation complete after 0s [id=f8dfb057df]
+aws_iam_role.lambda_exec: Creation complete after 0s [id=libratrack-lambda-role]
+aws_api_gateway_resource.webhook: Creating...
+aws_api_gateway_resource.webhook: Creation complete after 0s [id=3e8952c4]
+aws_api_gateway_method.webhook_post: Creating...
+aws_s3_bucket.covers: Creation complete after 0s [id=libratrack-covers]
+aws_s3_bucket.thumbnails: Creation complete after 0s [id=libratrack-thumbnails]
+data.aws_iam_policy_document.lambda_permissions: Reading...
+aws_api_gateway_method.webhook_post: Creation complete after 0s [id=agm-f8dfb057df-3e8952c4-POST]
+data.aws_iam_policy_document.lambda_permissions: Read complete after 0s [id=1241795276]
+aws_lambda_function.webhook: Creating...
+aws_iam_role_policy.lambda_permissions: Creating...
+aws_lambda_function.thumbnail: Creating...
+aws_iam_role_policy.lambda_permissions: Creation complete after 0s [id=libratrack-lambda-role:libratrack-minimal]
+aws_lambda_function.webhook: Creation complete after 5s [id=libratrack-webhook]
+aws_lambda_permission.apigw_webhook: Creating...
+aws_api_gateway_integration.webhook: Creating...
+aws_api_gateway_integration.webhook: Creation complete after 0s [id=agi-f8dfb057df-3e8952c4-POST]
+aws_lambda_permission.apigw_webhook: Creation complete after 0s [id=AllowAPIGatewayInvoke]
+aws_api_gateway_deployment.api: Creating...
+aws_api_gateway_deployment.api: Creation complete after 0s [id=2e13b0448e]
+aws_api_gateway_stage.stage: Creating...
+aws_api_gateway_stage.stage: Creation complete after 0s [id=ags-f8dfb057df-dev]
+aws_lambda_function.thumbnail: Still creating... [00m10s elapsed]
+aws_lambda_function.thumbnail: Creation complete after 10s [id=libratrack-thumbnail]
+aws_lambda_permission.s3_thumbnail: Creating...
+aws_lambda_permission.s3_thumbnail: Creation complete after 0s [id=AllowS3Invoke]
+aws_s3_bucket_notification.covers: Creating...
+aws_s3_bucket_notification.covers: Creation complete after 0s [id=libratrack-covers]
+
+Apply complete! Resources: 15 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+api_id = "f8dfb057df"
+try_it = "curl -X POST http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook -d @events/payload_valid.json"
+webhook_url_floci = "http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook"
+
+api_id = "f8dfb057df"
+try_it = "curl -X POST http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook -d @events/payload_valid.json"
+webhook_url_floci = "http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook"
+
+$ terraform -chdir=terraform output
+api_id = "f8dfb057df"
+try_it = "curl -X POST http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook -d @events/payload_valid.json"
+webhook_url_floci = "http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook"
+
+$ make smoke
+scripts/test.sh
+API: http://localhost:4566/restapis/f8dfb057df/dev/_user_request_/webhook
+
+── 1. Пряме викликання Lambda (aws lambda invoke) ──
+  ✅ valid.json → 200 (=200)
+  ✅ invalid.json → 400, не 502 (=400)
+  ✅ missing_field.json → 400 (=400)
+  ✅ unsupported_event.json → 400 (=400)
+
+── 2. Через API Gateway (curl) ──
+  ✅ валідний payload → 200 (=200)
+  ✅ зламаний JSON → 400 (не 502) (=400)
+  ✅ бракує поля → 400 (=400)
+  Відповідь на валідний запит:
+    {"donation":{"title":"The Go Programming Language","author":"Alan Donovan, Brian Kernighan","isbn":"9780134190440","condition":"good","donor_email":"reader@example.com"},"status":"processed"}
+
+── 3. S3-тригер: мініатюра обкладинки ──
+  ✅ мініатюра створена автоматично (S3-тригер спрацював)
+     PNG image data, 133 x 200, 8-bit/color RGBA, non-interlaced
+  ✅ мініатюру можна завантажити (2420 байт)
+
+── Підсумок: ✅ 9  ❌ 0 ──
+exit=0

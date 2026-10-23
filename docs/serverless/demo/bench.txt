@@ -1,0 +1,74 @@
+$ awsf s3 cp testdata/cover.png s3://libratrack-covers/covers/cover.png   # the Terraform re-apply left the bucket empty
+uploaded
+
+$ make bench
+scripts/bench-cold-start.sh 10
+Функція: libratrack-webhook, повторів: 10 (архітектура arm64)
+  #1   cold=  469 мс   warm=  334 мс
+  #2   cold=  462 мс   warm=  316 мс
+  #3   cold=  460 мс   warm=  323 мс
+  #4   cold=  464 мс   warm=  330 мс
+  #5   cold=  446 мс   warm=  333 мс
+  #6   cold=  478 мс   warm=  334 мс
+  #7   cold=  451 мс   warm=  321 мс
+  #8   cold=  471 мс   warm=  318 мс
+  #9   cold=  454 мс   warm=  326 мс
+  #10  cold=  457 мс   warm=  346 мс
+
+COLD: avg=461 мс  min=446 мс  max=478 мс
+WARM: avg=328 мс  min=316 мс  max=346 мс
+
+⚠️  Як трактувати результат (слайд 44, «Compare like with like»):
+  • На Floci «холодний старт» включає запуск Docker-контейнера, а не Firecracker
+    micro-VM. Абсолютні числа НЕ співпадають з реальним AWS.
+  • Корисний висновок — ВІДНОСНИЙ: різниця cold vs warm та вплив розміру бінарника,
+    пам'яті та залежностей. Порівнюйте з опублікованим бенчмарком обережно і
+    запишіть це застереження у своєму порівнянні.
+
+$ scripts/bench-cold-start.sh 20 libratrack-thumbnail
+Функція: libratrack-thumbnail, повторів: 20 (архітектура arm64)
+  #1   cold=  497 мс   warm=  337 мс
+  #2   cold=  497 мс   warm=  337 мс
+  #3   cold=  469 мс   warm=  325 мс
+  #4   cold=  467 мс   warm=  330 мс
+  #5   cold=  465 мс   warm=  330 мс
+  #6   cold=  478 мс   warm=  341 мс
+  #7   cold=  477 мс   warm=  336 мс
+  #8   cold=  486 мс   warm=  337 мс
+  #9   cold=  473 мс   warm=  342 мс
+  #10  cold=  489 мс   warm=  343 мс
+  #11  cold=  467 мс   warm=  350 мс
+  #12  cold=  489 мс   warm=  335 мс
+  #13  cold=  490 мс   warm=  344 мс
+  #14  cold=  489 мс   warm=  344 мс
+  #15  cold=  469 мс   warm=  343 мс
+  #16  cold=  457 мс   warm=  340 мс
+  #17  cold=  493 мс   warm=  334 мс
+  #18  cold=  466 мс   warm=  329 мс
+  #19  cold=  491 мс   warm=  327 мс
+  #20  cold=  486 мс   warm=  343 мс
+
+COLD: avg=479 мс  min=457 мс  max=497 мс
+WARM: avg=337 мс  min=325 мс  max=350 мс
+
+⚠️  Як трактувати результат (слайд 44, «Compare like with like»):
+  • На Floci «холодний старт» включає запуск Docker-контейнера, а не Firecracker
+    micro-VM. Абсолютні числа НЕ співпадають з реальним AWS.
+  • Корисний висновок — ВІДНОСНИЙ: різниця cold vs warm та вплив розміру бінарника,
+    пам'яті та залежностей. Порівнюйте з опублікованим бенчмарком обережно і
+    запишіть це застереження у своєму порівнянні.
+
+=================== AWS CLI start-up alone (inside every number above)
+  aws lambda get-function #1: 317 ms
+  aws lambda get-function #2: 329 ms
+  aws lambda get-function #3: 319 ms
+  aws lambda get-function #4: 319 ms
+  aws lambda get-function #5: 327 ms
+
+=================== package size with and without -ldflags="-s -w" (slide 16)
+  webhook   bootstrap:  6684832 B stripped (-s -w),  9820894 B not stripped | zip:  2732743 B vs  5417084 B
+  thumbnail bootstrap:  9437344 B stripped (-s -w), 13732477 B not stripped | zip:  3613160 B vs  7229597 B
+
+=================== Floci errors during the benchmark (should be none)
+(end)
+exit=0
