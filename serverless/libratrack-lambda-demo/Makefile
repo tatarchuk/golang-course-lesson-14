@@ -48,9 +48,9 @@ clean: ## Видалити build/ і локальні артефакти
 # ── AWS SAM CLI (слайд 20). Не потребує Floci — лише Docker. ────────────────
 # SAM викликає ці цілі як `make build-<LogicalId>`.
 build-WebhookFunction:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -ldflags="-s -w" -o $(ARTIFACTS_DIR)/bootstrap ./cmd/webhook
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -ldflags="-s -w" -o $(ARTIFACTS_DIR)/bootstrap ./cmd/webhook
 build-ThumbnailFunction:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -ldflags="-s -w" -o $(ARTIFACTS_DIR)/bootstrap ./cmd/thumbnail
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags lambda.norpc -ldflags="-s -w" -o $(ARTIFACTS_DIR)/bootstrap ./cmd/thumbnail
 
 sam-build: ## sam build
 	sam build -t sam/template.yaml

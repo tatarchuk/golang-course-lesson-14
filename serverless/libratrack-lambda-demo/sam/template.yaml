@@ -6,7 +6,7 @@ Globals:
   Function:
     Runtime: provided.al2023
     Handler: bootstrap
-    Architectures: [x86_64]      # Makefile збирає amd64. Для arm64 змініть тут і в Makefile (GOARCH)
+    Architectures: [arm64]       # як на слайді 42 (GOARCH=arm64); цілі build-* у Makefile збирають arm64
     Timeout: 10
     MemorySize: 256
 
