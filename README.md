@@ -6,7 +6,12 @@ REST-сервіс обліку музичних альбомів на Go з Post
 N+1; Тема 9 захистила API: реєстрація і логін з `bcrypt` та JWT, рольова авторизація (`member`, `staff`,
 `admin`) у вигляді middleware і AI-асистований аудит безпеки; Тема 10 додає серверний рендеринг:
 сторінку каталогу з живим пошуком і видаленням рядків через HTMX, вхід через HttpOnly-cookie, а шаблони,
-статику й міграції вбудовує в один бінарник через `go:embed`.
+статику й міграції вбудовує в один бінарник через `go:embed`. Тема 12 (Go Serverless) додає поруч із сервісом
+теку [serverless/](serverless/): приклад із презентації (курсовий демо-проєкт на емуляторі AWS Floci у курсовій
+VM), власну Lambda-функцію `album.submitted` з HTTP-тригером і згенерований ШІ та перевірений Terraform.
+
+Умова Теми 12, адаптована під варіант `albums`: [albums_lesson12_homework.md](albums_lesson12_homework.md).
+Звіт про виконання: розділ [Lesson 12 Report](#lesson-12-report-go-serverless--lambda).
 
 Матеріали Теми 10 і її додаткової частини DevOps Basics (умови, промпти, звіти) лишилися в репозиторії
 попередньої теми (<https://github.com/tatarchuk/golang-course-lesson-10>); їхні докази збережено тут у
@@ -148,7 +153,7 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
   без пароля або `DATABASE_URL` завершується помилкою; мігрує вбудованим набором, як і API.
 
 CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), тепер «Theme 8 + Theme 9 +
-Theme 10 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
+Theme 10 + Theme 12 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
 smoke-тест API та вебінтерфейсу. Додано для Теми 10. У статичній джобі: обов'язкові файли `web/`,
 `migrations/embed.go`, вебобробники з їхніми тестами; лише `html/template` і жодного з типів
 `template.HTML`, `HTMLAttr`, `JS`, `JSStr`, `URL`, `CSS`, `Srcset`; `go:embed` і `fs.Sub` у `web/`, `ParseFS` без `ParseGlob`; вбудовані міграції без `COPY
@@ -162,9 +167,12 @@ cookie jar, матриця видалення (анонім `401`, member `403`,
 порожній `200`, альбом зникає з API і з фрагмента), логаут прострочує cookie, сторінки несуть `Content-Security-Policy`,
 `X-Frame-Options` і `nosniff`, статика кешується, анонімний `GET /catalog` коштує не більше 5 `SELECT`, у лозі
 сервера немає токенів. Локальний повтор: `scripts/smoke.sh` дає 102/102
-([docs/web/smoke.txt](docs/web/smoke.txt)). Workflow запускається на кожен push і pull request; зелений запуск для
-цього коду (обидві джоби, Static checks та Migrations, tests, API smoke test):
-<https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/38913600126>.
+([docs/web/smoke.txt](docs/web/smoke.txt)). Додано для Теми 12: джоба `serverless` — матриця з двох Go-модулів
+(`serverless/libratrack-lambda-demo` і `serverless/albums-lambda`) з `go vet`, `go test -race` і `bash -n` для
+скриптів; обов'язкові файли serverless-частини; `prompts.txt` знову під JWT-guard; перевірка «лише ASCII у `.go`»
+пропускає теку демо (курсовий код з українськими коментарями). Workflow запускається на кожен push і pull request;
+зелений запуск коду Теми 10: <https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/38913600126>, Теми 12 —
+у розділі [Lesson 12 Report](#lesson-12-report-go-serverless--lambda).
 
 ### Документація API
 
@@ -404,7 +412,7 @@ internal/middleware/                 Logging, Recover, CORS (+ Authorization), A
 internal/testdb/                     спільне підключення для тестів із БД (advisory lock, вбудовані міграції, TRUNCATE)
 migrations/                          000001_init_schema, 000002_seed_demo_data, 000003_add_auth_fields (up/down) + embed.go: SQL-файли вбудовані в бінарник
 web/                                 вбудовані файли вебінтерфейсу (go:embed): templates.go, static.go, templates/ (layout, catalog, login, partials/album_row*), static/ (app.css, htmx.min.js 2.0.11)
-docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10), docs/devops/ (додаткова частина Теми 10)
+docs/                                OpenAPI (swag, BearerAuth), runbook з curl, ER-діаграма, docs/n1/ (Тема 8), docs/auth/ (Тема 9), docs/web/ (Тема 10), docs/devops/ (додаткова частина Теми 10), docs/serverless/ і docs/screenshots/serverless/ (Тема 12)
 scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI: API з логіном + вебінтерфейс із cookie jar), measure_n1.sh (N+1), render_er.sh
 Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) без теки migrations/ і стек postgres + api (JWT_SECRET обов'язковий, COOKIE_SECURE)
 Makefile, .env.example               щоденні команди (+ bootstrap, build) та приклад конфігурації (COOKIE_SECURE; MIGRATIONS_PATH закоментовано)
@@ -412,7 +420,12 @@ Vagrantfile                          VM для додаткової частин
 deploy/vagrant/                      провізіонери (Docker Engine, AWS CLI + awslocal, k3s), env-status.sh, обхід перевірки портів Vagrant на macOS 27 (port_check_fix.rb + тест)
 deploy/floci/                        Floci (compose.floci.yaml), Demo 1 (demo1-ec2.sh), Demo 2 (demo2-lambda.sh; lambda/ — окремий Go-модуль із тестами)
 deploy/k8s/                          k3s: PostgreSQL (StatefulSet), API (Deployment, NodePort), Ingress (Traefik), bootstrap Job, create-secrets.sh
-.github/workflows/theme8-check.yml   CI «Theme 8 + 9 + 10»: структура й статичні правила (html/template, go:embed, cookie), міграції, тести, статичний бінарник з порожньої теки, API + веб smoke-тест
+serverless/Vagrantfile               курсова VM Теми 12 (DockerGoGroup: Docker, Go, Terraform, AWS CLI, SAM CLI) з виправленнями для Apple Silicon і портами 4566/4500
+serverless/libratrack-lambda-demo/   курсовий демо-проєкт, приклад із презентації (webhook і thumbnail, SAM, Floci, Terraform, бенчмарк), із задокументованими виправленнями
+serverless/albums-lambda/            власна Lambda album.submitted: cmd/webhook (+ тести), events/, template.yaml (SAM), terraform/ (згенеровано ШІ, перевірено), scripts/
+albums_lesson12_homework.md          умова Теми 12, адаптована під варіант albums, UA + EN
+prompts.txt                          промпт генерації Terraform (дослівно, з перекладом) і промпт фінального рев'ю
+.github/workflows/theme8-check.yml   CI «Theme 8 + 9 + 10 + 12»: структура й статичні правила (html/template, go:embed, cookie), міграції, тести, статичний бінарник з порожньої теки, API + веб smoke-тест, vet і тести обох Lambda-модулів
 ```
 
 
@@ -487,3 +500,279 @@ deploy/k8s/                          k3s: PostgreSQL (StatefulSet), API (Deploym
   кешується на добу з `nosniff` (`Cache-Control: public, max-age=86400`: у вбудованих файлів немає mtime для
   валідаторів); тіло форми входу обмежене 16 КіБ (`internal/handler/web/auth.go:13,30`). Усе це додано за
   підсумками [фінального рев'ю Теми 10](https://github.com/tatarchuk/golang-course-lesson-10#фінальне-ревю).
+
+## Lesson 12 Report: Go Serverless — Lambda
+
+Умова: [albums_lesson12_homework.md](albums_lesson12_homework.md) — оцінювання «[Tasks 12] Go Serverless», слайд 48
+презентації «Go Serverless: Lambda-функції на стероїдах» і шаблон домашнього завдання курсового демо. Презентація й
+демо називають тему «Урок 11»; у цьому проходженні курсу це Тема 12.
+
+| Завдання (бали) | Що зроблено | Стан |
+|---|---|---|
+| 1. Запустити на власному ПК приклади з презентації (70) | курсовий демо-проєкт LibraTrack у курсовій VM: тести й збірка, `sam local`, розгортання у Floci (AWS CLI, API Gateway, S3-тригер), smoke-тест, Terraform (`plan` і `apply`), бенчмарк холодних стартів | готово, скриншоти S1–S11 |
+| 2. Згенерувати Terraform і проаналізувати рядок за рядком (+20) | Terraform для власної функції від ШІ за курсовим промптом, таблиця аналізу, `plan` до і після рев'ю, `apply` у Floci | готово, докази — файли |
+| 3. Serverless-функція з HTTP-тригером (+10) | `album.submitted` у [serverless/albums-lambda/](serverless/albums-lambda/): тести спершу, `sam local invoke` і `start-api`, виклик через API Gateway, створений Terraform | готово, скриншоти S12–S14 |
+
+### Середовище
+
+Усе, що потребує Docker, Floci, Terraform, AWS CLI, SAM чи Go, працює в курсовій VM з
+[serverless/Vagrantfile](serverless/Vagrantfile) ([docs/serverless/environment.txt](docs/serverless/environment.txt),
+скриншот [S1](docs/screenshots/serverless/s01-vm-versions.png)):
+
+| Компонент | Версія |
+|---|---|
+| VM `DockerGoGroup` (VirtualBox 7.2, Vagrant 2.4.9) | Ubuntu 24.04.3 LTS, aarch64, 2 vCPU, 1,8 ГБ |
+| Docker / Compose | 29.9.2 / v5.6.1 |
+| Go | 1.27.3 linux/arm64 |
+| Terraform / провайдер `hashicorp/aws` | 1.17.0 / 6.70.0 |
+| AWS CLI / SAM CLI | 2.38.5 / 1.170.0 |
+| Floci (локальний емулятор AWS) | 2.3.0 (= `latest` за digest) |
+
+Курсовий `Vagrantfile` змінено лише там, де він не працює на Apple Silicon (VirtualBox запускає лише arm64-гостей),
+і там, де цього потребує демо; перелік — у заголовку файлу: обхід перевірки портів Vagrant 2.4.9 на macOS 27
+(без нього `vagrant up` падає з ForwardPortCollision); Go, AWS CLI і SAM CLI завантажуються під архітектуру гостя,
+а не лише `x86_64`; встановлено `zip` і `make`; `go` і `gofmt` у `/usr/local/bin`, бо `/etc/profile.d` читають лише
+login-оболонки; порти 4566 (Floci) і 4500 (UI Floci) прокинуто на `127.0.0.1` Mac; англійські коментарі, кінці
+рядків LF.
+
+### Як відтворити
+
+```bash
+cd serverless && vagrant up        # курсова VM; VM уроку 10 (корінь репозиторію) — окрема, нижче не потрібна
+# Завдання 1: приклад із презентації
+vagrant ssh -c 'cd /vagrant/libratrack-lambda-demo && make test && make sam-invoke'
+vagrant ssh -c 'cd /vagrant/libratrack-lambda-demo && make up && make deploy-cli && make smoke'
+vagrant ssh -c 'cd /vagrant/libratrack-lambda-demo && make cleanup && make plan-tf && make deploy-tf && make smoke && make bench'
+# Завдання 3 і 2: власна функція та її Terraform (Floci з make up вище має працювати)
+vagrant ssh -c 'cd /vagrant/albums-lambda && make test && make sam-invoke'
+vagrant ssh -c 'cd /vagrant/albums-lambda && make plan-tf && make deploy-tf && make bench'
+```
+
+Веб-консоль Floci: <http://localhost:4566/_floci/ui> (перенаправляє на <http://localhost:4500/>).
+
+### Завдання 1. Приклад із презентації на власному ПК (70)
+
+Практична частина презентації (слайди 40–47) — це «приклад, усі кроки»; його реалізація — курсовий демо-проєкт,
+скопійований без змін у [serverless/libratrack-lambda-demo/](serverless/libratrack-lambda-demo/). Презентація не
+згадує Floci: демо додає його як локальну AWS, тож кроки README демо з Floci теж виконано.
+
+1. **Функція (слайд 41).** `cmd/webhook` нормалізує заявку на пожертву книги (приклад слайда), `cmd/thumbnail` —
+   S3-тригер мініатюр (слайд 21). `make test`: `webhook` 93,7 %, `thumbnail` 77,8 % покриття; `make build` дає
+   arm64-архіви 2,7 і 3,5 МБ — [make-test.txt](docs/serverless/demo/make-test.txt),
+   [S2](docs/screenshots/serverless/s02-demo-make-test.png).
+2. **Локальний тест із SAM (слайди 20, 42).** `sam build` і `sam local invoke`: `valid.json` → `statusCode` 200,
+   `invalid.json` → 400; `sam local start-api` і `curl`: валідний payload → 200, зламаний JSON → 400, подія `push`
+   зі слайда 20 → 400 `unsupported event` — [sam-local.txt](docs/serverless/demo/sam-local.txt),
+   [S3](docs/screenshots/serverless/s03-demo-sam-invoke.png), [S4](docs/screenshots/serverless/s04-demo-sam-start-api.png).
+3. **Розгортання у Floci (крок 2C README демо).** `make up` і `make deploy-cli`: два бакети, IAM-роль, дві функції,
+   REST API; `aws lambda invoke` → 200; `curl` через API Gateway → `200 OK` і `400 Bad Request` (не 502); S3-тригер
+   спрацював сам: `cover.png` 600×900 → мініатюра 133×200 ([thumb.png](docs/serverless/demo/thumb.png)); JSON-логи
+   з `request_id` у контейнерах Lambda — [floci.txt](docs/serverless/demo/floci.txt),
+   [S5](docs/screenshots/serverless/s05-demo-floci-deploy.png), [S6](docs/screenshots/serverless/s06-demo-floci-invoke-api.png),
+   [S7](docs/screenshots/serverless/s07-demo-s3-thumbnail.png). `make smoke`: ✅ 9 ❌ 0 —
+   [smoke.txt](docs/serverless/demo/smoke.txt), [S8](docs/screenshots/serverless/s08-demo-smoke.png); веб-консоль Floci —
+   [S9](docs/screenshots/serverless/s09-floci-ui.png).
+4. **Terraform демо (слайди 30–33, 43).** `make plan-tf`: `Plan: 15 to add` (прочитано: бакети, роль і політика,
+   дві функції, API Gateway, два `aws_lambda_permission`, нотифікація S3); `make deploy-tf` у Floci: `Apply
+   complete! Resources: 15 added`; `make smoke` проти створених Terraform ресурсів — знову 9/0 —
+   [terraform.txt](docs/serverless/demo/terraform.txt), [S10: destroy](docs/screenshots/serverless/s10-1-tf-destroy.png),
+   [plan](docs/screenshots/serverless/s10-2-tf-plan.png), [apply](docs/screenshots/serverless/s10-3-tf-deploy.png).
+   Відповіді на чотири питання рев'ю з README демо:
+   - `Action = "*"` немає: логи лише для `/aws/lambda/libratrack-*`, `GetObject` з одного бакета, `PutObject` в інший
+     (регіон і акаунт у ARN логів — `*`);
+   - `provided.al2023` і `var.lambda_architecture` = arm64 через `TF_VAR_lambda_architecture` з `env.sh`, як і збірка;
+     але значення змінної за замовчуванням — `x86_64`, тож голий `terraform plan` без `env.sh` оголосив би не ту архітектуру;
+   - регіон, ендпоїнт, бакети, стадія й архітектура — у `variables.tf`; імена функцій, ролі й API — у `main.tf`;
+   - 10 с / 256 МБ для webhook (коротка валідація, p99 із запасом) і 30 с / 512 МБ для thumbnail (обробка зображень
+     упирається в CPU, а CPU росте з пам'яттю).
+5. **Бенчмарк холодних стартів (слайд 44).** `make bench` (10 пар) і 20 пар для thumbnail: холодний 461 і 479 мс,
+   теплий 328 і 337 мс; сам AWS CLI — 317–329 мс, тож чистий холодний старт — новий Docker-контейнер, ≈ 140 мс;
+   без `-ldflags="-s -w"` zip удвічі більший (5,4 проти 2,7 МБ) — [bench.txt](docs/serverless/demo/bench.txt),
+   [S11](docs/screenshots/serverless/s11-demo-benchmark.png). Порівняння з опублікованими числами — розділ «Холодний старт».
+
+#### Що не спрацювало як написано
+
+| Що | Чому | Виправлення |
+|---|---|---|
+| Курсовий `Vagrantfile` не піднімається на Apple Silicon | Go, AWS CLI і SAM завантажуються лише для `x86_64`; Vagrant 2.4.9 на macOS 27 вважає зайнятими всі порти; немає `zip`; `go` не в `PATH` для `vagrant ssh -c` | [serverless/Vagrantfile](serverless/Vagrantfile), коміт `fb688f7` |
+| Демо без `go.sum` | перший `make test` виконує `go mod tidy` | закомічено `go.sum`; tidy прибрав невикористану непряму залежність `go-jmespath` (`6c95663`) |
+| SAM-шлях демо — `x86_64` | слайд 42 збирає `GOARCH=arm64`, VM — arm64 без емуляції x86 | `Architectures: [arm64]` і `GOARCH=arm64` у цілях `build-*`, як і пропонує коментар шаблону (`22fe799`) |
+| Floci не стартує (`make up` чекав 60 с) | Floci 2.3.0 працює як uid 1001, а `./.floci-data` на спільній теці VirtualBox (uid 1000, 755) недоступна для запису, і режим `hybrid` відмовляється стартувати | іменований том `floci-data` (`357010f`), лог — [floci-first-start-failure.txt](docs/serverless/demo/floci-first-start-failure.txt); `latest` — той самий образ, що й 2.3.0 |
+| Веб-консоль Floci не відкривається | `/_floci/ui` лише запускає UI-контейнер і перенаправляє на `localhost:4500` | проброшено порт 4500 (`b375836`) |
+| `Init Duration` у `sam local invoke` | 0,02–0,10 мс на кожен виклик: емулятор SAM не міряє ініціалізацію, а `Max Memory Used` повторює налаштовані 256 МБ | холодний старт заміряно на Floci (розділ «Холодний старт») |
+| CloudWatch Logs у Floci | Floci 2.3.0 не зберігає подій у потоках логів функцій | логи читаємо з контейнерів (`docker logs`) |
+
+### Завдання 2. Terraform від ШІ, рядок за рядком (+20)
+
+Промпт — курсовий «Промпт 1 · Terraform для функції» з додатком для Floci (шаблон слайда 33, адаптований до
+Terraform), надісланий дослівно у свіжу сесію ШІ без доступу до файлів і інструментів — [prompts.txt](prompts.txt).
+Відповідь цілком: [terraform-ai-raw.md](docs/serverless/albums/terraform-ai-raw.md); чотири файли закомічено без
+змін (`aa5f094`), рев'ю — наступний коміт (`5c8ec38`), тож diff показує рівно те, що змінено. «Цієї функції» в
+умові — власна функція: слайд 43 просить адаптувати промпт «до реального тригера, тайм-ауту та потреб у пам'яті вашої
+функції». Докази — файли, без скриншотів:
+[план чернетки](docs/serverless/albums/terraform-plan-raw.txt), [план після рев'ю](docs/serverless/albums/terraform-plan.txt),
+[apply у Floci і виклики](docs/serverless/albums/terraform-apply.txt).
+
+| Ресурс / рядок | Що створює | Ризик | Чи змінили? Чому |
+|---|---|---|---|
+| `terraform { required_version >= 1.5.0; aws ~> 6.0 }` | фіксує версії Terraform і провайдера | `~> 6.0` пускає будь-яку 6.x | Ні: версію (6.70.0) фіксує закомічений `.terraform.lock.hcl` |
+| `locals.use_emulator`, ключі `test` і `skip_*` лише для емулятора | перемикач Floci ↔ AWS однією змінною `aws_endpoint` | за замовчуванням — емулятор; для AWS треба `-var aws_endpoint=` (безпечна відмова: без цього запити йдуть на localhost) | Ні: краще за буквальний промпт — ключі `test` не потрапляють в AWS (П10) |
+| `dynamic "endpoints"`: apigateway, iam, lambda, logs, sts | ендпоїнти Floci для використаних сервісів | `sts` і `s3_use_path_style` тут зайві (S3 немає, STS не викликається) | Ні: нешкідливо, `sts` захищає від випадкового `aws_caller_identity` (П11) |
+| `variable "aws_region"` = `us-east-1` | регіон | — | Ні |
+| `variable "function_name"` = `"webhook"` | ім'я функції; від нього утворено імена ролі, політики, log group і API | загальне ім'я конфліктує з іншими функціями в акаунті | **Так**: за замовчуванням `albums-webhook` |
+| (немає) змінної архітектури | — | нічим узгодити архітектуру зі збіркою | **Так**: додано `lambda_architecture` (`x86_64`/`arm64`, за замовчуванням `arm64`), значення приходить із `TF_VAR_lambda_architecture` у `scripts/env.sh` |
+| `variable "aws_endpoint"` = `http://localhost:4566` | адреса Floci | — | Ні |
+| `locals.lambda_zip = ../build/webhook.zip` | шлях до пакета | `plan` падає без архіву: `filebase64sha256` читає його вже під час плану (П1) | Ні: `make plan-tf` спершу виконує `make build` |
+| `aws_iam_role.lambda` + `data lambda_assume_role` | роль, яку може взяти лише `lambda.amazonaws.com` | немає умови `aws:SourceAccount`; для ролі виконання Lambda AWS її не вимагає | Ні |
+| `aws_cloudwatch_log_group.lambda`, retention 14 днів | `/aws/lambda/albums-webhook` | видалену вручну групу функція сама не створить (немає `logs:CreateLogGroup`, П4) | Ні: свідомий компроміс; без retention логи жили б вічно |
+| `aws_iam_role_policy.lambda_logs` + `data lambda_logs` | `logs:CreateLogStream`, `logs:PutLogEvents` на `<ARN групи>:*` | немає `Action = "*"` чи `Resource = "*"` | Ні: уже звужено до власної log group (у демо — `libratrack-*` і `*` для регіону й акаунта) |
+| `runtime = "provided.al2023"`, `handler = "bootstrap"` | кастомне середовище для Go | `go1.x` не використано | Ні |
+| `architectures = ["x86_64"]` | архітектура функції | збірка — arm64; Floci ігнорує заявлену архітектуру, тож помилка (`exec format error`) з'явиться лише в справжній AWS — пастка слайда 32, закладена в сам промпт | **Так**: `[var.lambda_architecture]` |
+| `filename` + `source_code_hash` | пакет і його хеш | без хешу зміни коду не потрапили б у функцію | Ні: хеш є |
+| `timeout = 10`, `memory_size = 256` | ліміти | обробник працює 2–5 мс (`sam local`), тож 10 с — p99 з великим запасом, а не 900; 256 МБ не заміряно (локально «Max Memory Used» не вимірюється) | Ні: у межах; пам'ять варто підібрати за «Max Memory Used» у CloudWatch справжньої AWS |
+| `depends_on` (група, політика) | порядок: група й права раніше за функцію | — | Ні |
+| `aws_api_gateway_rest_api.webhook`, без `endpoint_configuration` | REST API `albums-webhook-api` | у справжній AWS тип за замовчуванням EDGE; для вебхука в одному регіоні краще REGIONAL (П7) | Ні: як і в демо, щоб не залежати від Floci; ризик для продакшену |
+| `aws_api_gateway_resource` + `aws_api_gateway_method` (POST, `authorization = "NONE"`) | `POST /webhook` | публічний ендпоїнт без автентифікації, API-ключа й throttling (П6) | Ні: так у завданні; у продакшені — HMAC-підпис у функції, usage plan/throttling |
+| `aws_api_gateway_integration` (AWS_PROXY, POST, `invoke_arn`) | проксі-інтеграція з Lambda | — | Ні |
+| `aws_api_gateway_deployment` (triggers, `create_before_destroy`) + `aws_api_gateway_stage.dev` | деплой і стадія `dev` | зміна атрибутів методу не створює нового деплою (П9) | Ні |
+| `aws_lambda_permission.apigw_invoke`, `source_arn = <execution_arn>/dev/POST/webhook` | дозвіл API Gateway викликати функцію | через `skip_requesting_account_id` у Floci в ARN порожній акаунт (П12); Floci IAM не перевіряє | Ні: уже вужче за `/*/*` у демо |
+| `outputs.tf` | `function_name`, `rest_api_id`, `webhook_url` (формат Floci `_user_request_`) | — | Ні |
+
+Також `scripts/env.sh`: `API_NAME` = `albums-webhook-api`, бо Terraform називає API `<function_name>-api`.
+
+**Чотири перевірки слайда 32:** обсяг IAM — лише логи власної групи; середовище й архітектура — `provided.al2023`
+так, архітектуру виправлено на змінну; жорстко закодовані значення — регіон, ім'я функції, ендпоїнт і архітектура у
+змінних, акаунта в коді немає; `terraform plan` прочитано до будь-якого `apply`.
+
+**Чекліст рев'ю з `docs/ai-prompts.md`:** 1) `*` немає ✔; 2) runtime і архітектура — виправлено ✔; 3) `go1.x`
+немає ✔; 4) регіон, акаунт та імена не захардкоджені ✔; 5) timeout 10 с, не 900 ✔; 6) пам'ять не заміряна —
+залишено 256 МБ із приміткою; 7) `aws_lambda_permission` є, `source_arn` звужено до `dev/POST/webhook` ✔;
+8) plan прочитано до apply ✔.
+
+**Порівняння.** Із прикладом ШІ на слайді 31: там захардкоджені ім'я та архітектура, `function.zip` без
+`source_code_hash`, роль без жодної політики й немає API; тут — змінні, хеш пакета, log group із retention, вузька
+політика логів і API Gateway з вузьким дозволом. Із `terraform/main.tf` демо: ШІ вужче в IAM (власна група замість
+`libratrack-*` і без `logs:CreateLogGroup`) і в `source_arn` (`dev/POST/webhook` замість `/*/*`), додав retention логів;
+демо правильніше лише в архітектурі (змінна замість `x86_64`). «Що ШІ зробив ширше, ніж треба?» — у правах нічого;
+ширше за потребу лише публічний метод без throttling, тип EDGE за замовчуванням і зайві `sts` та `s3_use_path_style`.
+
+**Плани:** чернетка — `init`, `validate` і `Plan: 11 to add` з першого запуску, як і передбачила відповідь ШІ;
+після рев'ю — знову `Plan: 11 to add`, але з `arm64` та іменами `albums-webhook`. Необов'язковий `apply` у Floci:
+`Apply complete! Resources: 11 added`, і функція відповідає через створений Terraform API Gateway: 200 з
+нормалізованим альбомом, 400 на зламаний JSON і 400 на відсутні поля.
+
+**Чого я не очікував побачити:**
+1. План не показує саму IAM-політику: `data.aws_iam_policy_document.lambda_logs` читається «during apply», бо
+   залежить від ARN групи, тож `policy` і `resources` — `(known after apply)`. Найважливіше для рев'ю видно лише в
+   коді, не в плані. Так само `source_arn`.
+2. `architectures = ["x86_64"]` пройшло `validate` і `plan` без жодного попередження, а Floci запустив би
+   arm64-бінарник однаково — пастка слайда 32 локально невидима.
+3. `TF_VAR_lambda_architecture` з `env.sh` чернетка мовчки проігнорувала: Terraform не попереджає про змінні
+   середовища для неоголошених змінних.
+4. Провайдер v6 додає `region = "us-east-1"` до кожного ресурсу і значення, яких ніхто не писав:
+   `reserved_concurrent_executions = -1`, `publish = false`, `skip_destroy = false`.
+5. Прогноз ШІ справдився точно: `Plan: 11 to add` і до, і після рев'ю — рев'ю змінило значення, а не набір ресурсів.
+6. План залежить від локального артефакту: `filename = "./../build/webhook.zip"` і хеш рахуються під час `plan`,
+   тож без `make build` план не будується.
+
+### Завдання 3. Serverless-функція з HTTP-тригером (+10)
+
+[serverless/albums-lambda/](serverless/albums-lambda/) — окремий Go-модуль (`albums-lambda`, Go 1.26,
+`aws-lambda-go` v1.55.1). За основу взято `cmd/webhook` демо, предметна область — заявка на альбом із полями
+`internal/model/album.go`:
+
+| Запит `POST /webhook` | Відповідь |
+|---|---|
+| `{"event":"album.submitted","data":{...}}` без помилок | `200 {"status":"processed","album":{...}}`: назва, лейбл та імена виконавців без зайвих пробілів (зокрема нерозривних, табуляцій і переносів), повтори виконавців без урахування регістру прибрано, жанр у нижньому регістрі, `notes` обрізано, порожнє → `null`; `release_year` і `notes` завжди присутні |
+| порожнє тіло, некоректний base64, зламаний JSON | `400` `request body is empty` / `body is not valid base64` / `invalid json` |
+| інша подія; `data` не JSON-об'єкт | `400` `unsupported event` (+ `event`) / `data must be a JSON object` |
+| поле не того типу | `400` `invalid field type` (+ `field`) |
+| помилки валідації | `400` `validation failed` з усіма проблемами одразу: `title`, `label`, хоча б один виконавець без порожніх імен, жанр з `ALLOWED_GENRES` (за замовчуванням `electronic, jazz, rock`), рік від `MIN_RELEASE_YEAR` (1900) до наступного року |
+
+Помилки клієнта — звичайна відповідь 400 і `nil` замість Go-помилки, тож API Gateway ніколи не віддає 502
+(слайд 19). Логер (`slog`, JSON у stdout) і конфігурація — змінні рівня пакета, створюються один раз у фазі init
+(слайди 9, 22, 23); некоректна конфігурація зупиняє init. Тести написано першими:
+[tests-before.txt](docs/serverless/albums/tests-before.txt) (не компілюється: `undefined: Config`, `normalize`, ...),
+[tests-after.txt](docs/serverless/albums/tests-after.txt) (`ok`, 96 % покриття) —
+[S12](docs/screenshots/serverless/s12-albums-make-test.png). Фікстури: чотири події API Gateway і три сирі тіла в
+[events/](serverless/albums-lambda/events/), вони ж — регресійні тести (`TestEventFixtures`).
+
+HTTP-тригер у роботі: `sam local invoke` — `valid.json` 200, `invalid.json` 400, `missing_field.json` 400;
+`sam local start-api` і `curl` — 200 з нормалізованим альбомом, 400, 400 —
+[sam-local.txt](docs/serverless/albums/sam-local.txt), [S13](docs/screenshots/serverless/s13-albums-sam-invoke.png),
+[S14](docs/screenshots/serverless/s14-albums-sam-start-api.png); через API Gateway у Floci, створений перевіреним
+Terraform, — [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt).
+
+### Холодний старт
+
+Повна нотатка-порівняння (її просить принести останній слайд): [cold-start.md](docs/serverless/albums/cold-start.md).
+
+| Що | Холодний | Теплий |
+|---|---|---|
+| `albums-webhook` на Floci (`make bench`, 10 раундів) | 507 мс | 337 мс |
+| сам AWS CLI у тих самих раундах | 336 мс | — |
+| **чистий старт контейнера** (власна функція / демо) | **≈ 170 / ≈ 140 мс** | ≈ 1–15 мс |
+| опубліковано для Go: слайд 14 / [reintech.io 2026](https://reintech.io/blog/aws-lambda-performance-benchmarks-2026-nodejs-python-go-rust) / [edjgeek](https://edjgeek.com/blog/lambda-cold-starts-dead/) | 120 / 112 / 50–100 мс | — |
+| опубліковано для Node.js і Python (ті самі джерела) | 180–350 / 200–400 мс | — |
+
+Порядок величин збігається з опублікованими числами для Go і нижчий, ніж для Node.js і Python, але величини різні:
+`Init Duration` у справжній Lambda (Firecracker micro-VM) проти старту Docker-контейнера у VirtualBox-VM, без мережі
+й VPC, з уже завантаженим образом. **Застереження «Floci ≠ AWS»:** абсолютні мілісекунди не переносяться в AWS;
+переносяться розрив «холодний/теплий» і вплив розміру пакета. У продакшені варто чекати `Init Duration` порядку
+50–150 мс для бінарника Go на 2,6 МБ, плюс затримку API Gateway і мережі; пам'ять (а з нею й CPU) підбирати за
+справжніми `Init Duration` і `Max Memory Used`.
+
+### Чеклісти з презентації
+
+Чекліст тестів збірки (слайд 45):
+
+| Сценарій | Очікуваний результат | Результат |
+|---|---|---|
+| Коректний payload вебхука | 200 із перетвореним/провалідованим результатом | ✔ демо: [smoke](docs/serverless/demo/smoke.txt), [S4](docs/screenshots/serverless/s04-demo-sam-start-api.png), [S6](docs/screenshots/serverless/s06-demo-floci-invoke-api.png); власна: [S14](docs/screenshots/serverless/s14-albums-sam-start-api.png), [apply](docs/serverless/albums/terraform-apply.txt) |
+| Некоректне JSON-тіло | 400 зі зрозумілим повідомленням, а не 502 | ✔ `{"error":"invalid json"}` через `sam local`, API Gateway у Floci і юніт-тести (`TestClientErrorsAre400Not502`) |
+| Відсутнє обов'язкове поле | 400, а не паніка | ✔ `validation failed` з усіма проблемами: [sam-local.txt](docs/serverless/albums/sam-local.txt), [smoke](docs/serverless/demo/smoke.txt) |
+| Час холодного старту в `sam local invoke` | записано й порівняно з бенчмарком | ✔ записано (≈ 0,05 мс — емулятор не міряє init), тому заміряно на Floci й порівняно: [cold-start.md](docs/serverless/albums/cold-start.md) |
+| Вивід `terraform plan` | переглянуто, кожен ресурс і дозвіл зрозумілий | ✔ демо: [terraform.txt](docs/serverless/demo/terraform.txt); ШІ: [чернетка](docs/serverless/albums/terraform-plan-raw.txt), [після рев'ю](docs/serverless/albums/terraform-plan.txt) |
+| IAM-політика в згенерованому Terraform | обмежена лише потрібним функції | ✔ лише `logs:CreateLogStream` і `logs:PutLogEvents` на власну log group |
+
+Чекліст перед завершенням (слайд 47):
+
+- ✔ Функція правильно обробляє і коректний, і некоректний ввід — щонайменше дві фікстури `sam invoke`
+  (`valid`, `invalid`, `missing_field`), не лише «щасливий шлях».
+- ✔ Клієнти SDK і конфігурацію ініціалізовано поза обробником: `logger` і `cfg` — змінні рівня пакета
+  (`TestPackageLevelConfig`).
+- ✔ Кожен рядок згенерованого Terraform прочитано, зрозуміло й виправлено там, де значення були не ті — таблиця вище.
+- ✔ Відомо приблизний час холодного старту й те, як він порівнюється з опублікованими числами — розділ вище.
+
+### Докази
+
+- Середовище: [environment.txt](docs/serverless/environment.txt).
+- Приклад із презентації: [make-test.txt](docs/serverless/demo/make-test.txt), [sam-local.txt](docs/serverless/demo/sam-local.txt),
+  [floci-first-start-failure.txt](docs/serverless/demo/floci-first-start-failure.txt), [floci.txt](docs/serverless/demo/floci.txt),
+  [smoke.txt](docs/serverless/demo/smoke.txt), [terraform.txt](docs/serverless/demo/terraform.txt),
+  [bench.txt](docs/serverless/demo/bench.txt), [thumb.png](docs/serverless/demo/thumb.png).
+- Власна функція й Terraform: [tests-before.txt](docs/serverless/albums/tests-before.txt),
+  [tests-after.txt](docs/serverless/albums/tests-after.txt), [sam-local.txt](docs/serverless/albums/sam-local.txt),
+  [terraform-ai-raw.md](docs/serverless/albums/terraform-ai-raw.md), [terraform-plan-raw.txt](docs/serverless/albums/terraform-plan-raw.txt),
+  [terraform-plan.txt](docs/serverless/albums/terraform-plan.txt), [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt),
+  [bench.txt](docs/serverless/albums/bench.txt), [cold-start.md](docs/serverless/albums/cold-start.md).
+- Промпти: [prompts.txt](prompts.txt).
+
+#### Скриншоти
+
+| # | Що показує | |
+|---|---|---|
+| S1 | VM: версії Go, Terraform, AWS CLI, SAM, Docker; `aarch64` | ![S1](docs/screenshots/serverless/s01-vm-versions.png) |
+| S2 | демо: `make test` і `make build` | ![S2](docs/screenshots/serverless/s02-demo-make-test.png) |
+| S3 | демо: `sam build` і `sam local invoke` — 200 і 400 | ![S3](docs/screenshots/serverless/s03-demo-sam-invoke.png) |
+| S4 | демо: `sam local start-api` і `curl` — 200, 400, 400 | ![S4](docs/screenshots/serverless/s04-demo-sam-start-api.png) |
+| S5 | демо: `make deploy-cli` у Floci і `docker ps` | ![S5](docs/screenshots/serverless/s05-demo-floci-deploy.png) |
+| S6 | демо: `aws lambda invoke` і `curl` через API Gateway — 200 і 400 | ![S6](docs/screenshots/serverless/s06-demo-floci-invoke-api.png) |
+| S7 | демо: S3-тригер створює мініатюру 133×200 | ![S7](docs/screenshots/serverless/s07-demo-s3-thumbnail.png) |
+| S8 | демо: `make smoke` — ✅ 9 ❌ 0 | ![S8](docs/screenshots/serverless/s08-demo-smoke.png) |
+| S9 | веб-консоль Floci з ресурсами | ![S9](docs/screenshots/serverless/s09-floci-ui.png) |
+| S10 | демо Terraform: destroy, `Plan: 15 to add`, `Apply complete!` | ![S10 destroy](docs/screenshots/serverless/s10-1-tf-destroy.png) ![S10 plan](docs/screenshots/serverless/s10-2-tf-plan.png) ![S10 apply](docs/screenshots/serverless/s10-3-tf-deploy.png) |
+| S11 | демо: `make bench`, холодний проти теплого | ![S11](docs/screenshots/serverless/s11-demo-benchmark.png) |
+| S12 | власна функція: `make test`, 96 % покриття | ![S12](docs/screenshots/serverless/s12-albums-make-test.png) |
+| S13 | власна функція: `sam local invoke` — 200, 400, 400 | ![S13](docs/screenshots/serverless/s13-albums-sam-invoke.png) |
+| S14 | власна функція: `sam local start-api` і `curl` | ![S14](docs/screenshots/serverless/s14-albums-sam-start-api.png) |
