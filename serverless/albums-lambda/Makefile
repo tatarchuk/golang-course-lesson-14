@@ -2,7 +2,7 @@
 SHELL := /usr/bin/env bash
 
 .DEFAULT_GOAL := help
-.PHONY: help test build sam-build sam-invoke sam-api plan-tf deploy-tf destroy-tf
+.PHONY: help test build sam-build sam-invoke sam-api plan-tf deploy-tf destroy-tf bench
 
 help: ## Show the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -37,3 +37,6 @@ deploy-tf: build ## Terraform on Floci: apply, after the plan was read
 
 destroy-tf: build ## Terraform on Floci: destroy
 	scripts/deploy-tf.sh destroy
+
+bench: ## Cold vs warm calls of the deployed function on Floci (deck step 4)
+	scripts/bench-cold-start.sh 10

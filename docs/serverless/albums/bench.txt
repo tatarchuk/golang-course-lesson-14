@@ -1,0 +1,22 @@
+$ make bench
+scripts/bench-cold-start.sh 10
+Function: albums-webhook, 10 rounds (architecture arm64)
+  #1   cold=  533 ms   warm=  337 ms   CLI alone=  340 ms
+  #2   cold=  544 ms   warm=  333 ms   CLI alone=  335 ms
+  #3   cold=  492 ms   warm=  332 ms   CLI alone=  324 ms
+  #4   cold=  490 ms   warm=  334 ms   CLI alone=  325 ms
+  #5   cold=  479 ms   warm=  336 ms   CLI alone=  335 ms
+  #6   cold=  514 ms   warm=  339 ms   CLI alone=  331 ms
+  #7   cold=  483 ms   warm=  345 ms   CLI alone=  359 ms
+  #8   cold=  517 ms   warm=  340 ms   CLI alone=  341 ms
+  #9   cold=  500 ms   warm=  343 ms   CLI alone=  335 ms
+  #10  cold=  519 ms   warm=  336 ms   CLI alone=  340 ms
+
+COLD: avg=507 ms  min=479 ms  max=544 ms
+WARM: avg=337 ms  min=332 ms  max=345 ms
+CLI:  avg=336 ms  min=324 ms  max=359 ms
+
+How to read it (slide 44, "compare like with like"): every invoke number includes the AWS CLI
+start-up (the CLI line), so the function's own share is the difference. A cold start on Floci is a
+new Docker container in this VM, not a Firecracker micro-VM: the absolute numbers do not carry over
+to AWS, the cold-minus-warm difference does.
