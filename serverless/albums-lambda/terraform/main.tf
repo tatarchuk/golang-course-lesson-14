@@ -54,7 +54,7 @@ resource "aws_lambda_function" "webhook" {
   role          = aws_iam_role.lambda.arn
 
   runtime       = "provided.al2023"
-  architectures = ["x86_64"]
+  architectures = [var.lambda_architecture] # Review: was ["x86_64"]; see variables.tf
   handler       = "bootstrap"
 
   filename         = local.lambda_zip

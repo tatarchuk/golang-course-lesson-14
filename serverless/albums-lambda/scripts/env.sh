@@ -21,7 +21,7 @@ export TF_VAR_lambda_architecture="$LAMBDA_ARCH"
 export TF_DATA_DIR="$HOME/.terraform-data/albums-lambda"
 
 export WEBHOOK_FN="albums-webhook"
-export API_NAME="albums-api"
+export API_NAME="albums-webhook-api"     # Terraform names the REST API <function_name>-api
 export STAGE="dev"
 
 # An explicit --endpoint-url also works with AWS CLI versions older than 2.13.

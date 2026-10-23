@@ -1,0 +1,69 @@
+Lesson 12 prompt log (Albums API, variant albums; Go Serverless).
+Homework task 2 asks to have AI generate the Terraform for the function and to analyze it line by line.
+The prompt below is the course's "Промпт 1 · Terraform для функції" followed by its "Додаток для Floci",
+copied verbatim from serverless/libratrack-lambda-demo/docs/ai-prompts.md and sent in Ukrainian, as
+written, to a fresh Claude session (a Claude Code general-purpose subagent with no files and no tools),
+after one English instruction line. An English translation follows the original. The full reply is in
+docs/serverless/albums/terraform-ai-raw.md; its four files were committed unchanged
+(serverless/albums-lambda/terraform/, commit aa5f094) and then reviewed by hand: see README.md, section
+"Lesson 12 Report", and the "Result / manual edits" notes under the prompt.
+
+=== Prompt 1: Terraform for the album.submitted Lambda on Floci (task 2, sent verbatim) ===
+
+Answer the request below as you would answer a user in a chat. Do not read or write files and do not use tools.
+
+Згенеруй Terraform (hashicorp/aws ~> 6.0) для AWS Lambda функції на Go:
+
+- runtime provided.al2023, architectures ["x86_64"], handler "bootstrap"
+- deployment package: ../build/webhook.zip, з source_code_hash
+- timeout 10 секунд, memory 256 МБ
+- викликається через API Gateway REST: POST /webhook, інтеграція AWS_PROXY,
+  стадія "dev"
+- IAM-роль ЛИШЕ з правами на запис у CloudWatch Logs для цієї функції
+  (жодних Action = "*", жодних Resource = "*" окрім де це неминуче)
+- регіон і ім'я функції винеси у variables
+- додай aws_lambda_permission для API Gateway
+
+Окремо поясни, які ресурси створюються, і познач усе, що ти припустив.
+
+Налаштуй provider "aws" для локального емулятора Floci (http://localhost:4566):
+access_key/secret_key = "test", skip_credentials_validation,
+skip_metadata_api_check, skip_requesting_account_id = true,
+s3_use_path_style = true, і блок endpoints для кожного використаного сервісу.
+Ендпоїнт винеси у змінну, щоб прибрати блок для справжньої AWS.
+
+--- English translation (for reference; the Ukrainian text above is what was sent) ---
+
+Generate Terraform (hashicorp/aws ~> 6.0) for an AWS Lambda function in Go:
+
+- runtime provided.al2023, architectures ["x86_64"], handler "bootstrap"
+- deployment package: ../build/webhook.zip, with source_code_hash
+- timeout 10 seconds, memory 256 MB
+- invoked through API Gateway REST: POST /webhook, AWS_PROXY integration,
+  stage "dev"
+- an IAM role ONLY with permissions to write to CloudWatch Logs for this function
+  (no Action = "*", no Resource = "*" except where unavoidable)
+- move the region and the function name into variables
+- add an aws_lambda_permission for API Gateway
+
+Separately explain which resources are created and flag everything you assumed.
+
+Configure provider "aws" for the local Floci emulator (http://localhost:4566):
+access_key/secret_key = "test", skip_credentials_validation,
+skip_metadata_api_check, skip_requesting_account_id = true,
+s3_use_path_style = true, and an endpoints block for every service used.
+Move the endpoint into a variable so the block can be removed for real AWS.
+
+--- Result / manual edits ---
+
+The reply: four files (providers.tf, variables.tf, main.tf, outputs.tf), a table of the 11 resources
+and 15 labelled assumptions (П1-П15). It predicted "Plan: 11 to add"; init, validate and plan on Floci
+confirmed that on the first run (docs/serverless/albums/terraform-plan-raw.txt). Line-by-line review:
+- architectures = ["x86_64"], which the prompt itself asks for, did not match the arm64 build: replaced
+  with var.lambda_architecture, a new variable fed by TF_VAR_lambda_architecture from scripts/env.sh;
+- the function_name default "webhook" became "albums-webhook";
+- already right and kept: logs-only IAM on the function's own log group (narrower than the demo's),
+  source_arn narrowed to dev/POST/webhook, a log group with 14-day retention, source_code_hash, and an
+  emulator switch that keeps the "test" keys away from real AWS.
+After the review: "Plan: 11 to add" with arm64 and the albums-webhook names
+(docs/serverless/albums/terraform-plan.txt).
