@@ -757,6 +757,7 @@ Terraform, — [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt)
   [terraform-plan.txt](docs/serverless/albums/terraform-plan.txt), [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt),
   [bench.txt](docs/serverless/albums/bench.txt), [cold-start.md](docs/serverless/albums/cold-start.md).
 - Промпти: [prompts.txt](prompts.txt).
+- Фінальне рев'ю: [review-raw.md](docs/serverless/review-raw.md).
 
 #### Скриншоти
 
@@ -776,3 +777,29 @@ Terraform, — [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt)
 | S12 | власна функція: `make test`, 96 % покриття | ![S12](docs/screenshots/serverless/s12-albums-make-test.png) |
 | S13 | власна функція: `sam local invoke` — 200, 400, 400 | ![S13](docs/screenshots/serverless/s13-albums-sam-invoke.png) |
 | S14 | власна функція: `sam local start-api` і `curl` | ![S14](docs/screenshots/serverless/s14-albums-sam-start-api.png) |
+
+### Фінальне рев'ю
+
+Коли код, докази й звіт були готові, окремий агент (Claude Code, свіжий контекст, Claude Fable 5.1, лише читання;
+промпт у [prompts.txt](prompts.txt), розділ «Final review») перечитав увесь diff Теми 12 (`1f3a714..7b423b9`,
+15 комітів) разом з умовою, планом і журналом рішень. Він звірив кожне число звіту з файлами доказів, перевірив,
+що чернетку Terraform від ШІ закомічено без змін, запустив `go vet` і `go test -race` обох модулів (власного —
+також на Go 1.26.0, яку CI бере з `go.mod`) і повторив статичні перевірки CI. Необроблений звіт:
+[docs/serverless/review-raw.md](docs/serverless/review-raw.md). Вердикт — «з виправленнями»: критичних знахідок
+немає, одна важлива й дев'ять дрібних. Тріаж:
+
+| № | Знахідка | Рішення |
+|---|---|---|
+| I1 | README посилався на промпт фінального рев'ю, звіт рев'ю й зелений прогін CI Теми 12, яких ще не було (заплановані завершальні кроки) | **Fixed Now**: промпт — у [prompts.txt](prompts.txt), звіт — [review-raw.md](docs/serverless/review-raw.md), тріаж — цей розділ |
+| M1 | `TestNormalizeCleansUpSubmission` перевіряє нерозривний пробіл і табуляцію, а перенесення рядка, яке теж називає план (Review Focus 1), — ні | **Deferred**: `strings.Fields` обробляє `\n` так само, поведінка та сама |
+| M2 | Запасна гілка в `handler.go` відповідає `data must be a JSON object` | **Deferred**: гілка недосяжна — на цей момент `data` уже синтаксично коректний JSON-об'єкт |
+| M3 | Жанр обрізається й переводиться в нижній регістр, але подвійні пробіли всередині не стискаються, як у назві, лейблі й артистах | **Deferred**: типові жанри — одне слово; це важливо лише для багатослівних жанрів у `ALLOWED_GENRES` |
+| M4 | `MIN_RELEASE_YEAR`, більший за наступний рік, не відхиляється на етапі init: кожен указаний рік отримує 400 із суперечливими межами | **Deferred**: помилка конфігурації оператора, не клієнта; типове значення — 1900 |
+| M5 | `scripts/env.sh` експортує `API_NAME` і `STAGE`, яких ніщо в `albums-lambda` не читає | **Deferred**: довідка про імена, які створює Terraform; на поведінку не впливає |
+| M6 | «2.3.0 = `latest` за digest» не підтверджено рядком у доказах | **Deferred**: обидва compose-файли закріплюють `floci/floci:2.3.0`, від `latest` нічого не залежить |
+| M7 | Ні Terraform, ні SAM не задають `ALLOWED_GENRES` і `MIN_RELEASE_YEAR`, тож розгорнута функція працює лише з типовими значеннями; у таблиці аналізу Terraform цього рядка немає | **Deferred**: промпт для ШІ цих змінних не згадував; кандидат на наступний крок — змінні Terraform з поточними типовими значеннями |
+| M8 | `.PHONY` у `Makefile` не містить `build-AlbumWebhookFunction` (як і в демо) | **Deferred**: файлу з такою назвою немає, ціль працює |
+| M9 | `TestPackageLevelConfig` і `TestEventFixtures` розраховують, що ці дві змінні оточення не задані | **Deferred**: у тестах про це є коментар; `t.Setenv` не допоможе, бо змінну рівня пакета ініціалізовано ще до тестів |
+
+Дев'ять пунктів, які рецензент свідомо не оцінював (розділ «Declined to judge» звіту), — рішення, ухвалені під час
+роботи; усі лишено як є, з причинами, наведеними там же.
