@@ -171,8 +171,8 @@ cookie jar, матриця видалення (анонім `401`, member `403`,
 (`serverless/libratrack-lambda-demo` і `serverless/albums-lambda`) з `go vet`, `go test -race` і `bash -n` для
 скриптів; обов'язкові файли serverless-частини; `prompts.txt` знову під JWT-guard; перевірка «лише ASCII у `.go`»
 пропускає теку демо (курсовий код з українськими коментарями). Workflow запускається на кожен push і pull request;
-зелений запуск коду Теми 10: <https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/38913600126>, Теми 12 —
-у розділі [Lesson 12 Report](#lesson-12-report-go-serverless--lambda).
+зелений запуск коду Теми 10: <https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/38913600126>, Теми 12:
+<https://github.com/tatarchuk/golang-course-lesson-12/actions/runs/39953226052>.
 
 ### Документація API
 
@@ -784,13 +784,13 @@ Terraform, — [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt)
 промпт у [prompts.txt](prompts.txt), розділ «Final review») перечитав увесь diff Теми 12 (`1f3a714..7b423b9`,
 15 комітів) разом з умовою, планом і журналом рішень. Він звірив кожне число звіту з файлами доказів, перевірив,
 що чернетку Terraform від ШІ закомічено без змін, запустив `go vet` і `go test -race` обох модулів (власного —
-також на Go 1.26.0, яку CI бере з `go.mod`) і повторив статичні перевірки CI. Необроблений звіт:
+також на Go 1.26.0, найменшій версії, яку дозволяє `go.mod`) і повторив статичні перевірки CI. Необроблений звіт:
 [docs/serverless/review-raw.md](docs/serverless/review-raw.md). Вердикт — «з виправленнями»: критичних знахідок
 немає, одна важлива й дев'ять дрібних. Тріаж:
 
 | № | Знахідка | Рішення |
 |---|---|---|
-| I1 | README посилався на промпт фінального рев'ю, звіт рев'ю й зелений прогін CI Теми 12, яких ще не було (заплановані завершальні кроки) | **Fixed Now**: промпт — у [prompts.txt](prompts.txt), звіт — [review-raw.md](docs/serverless/review-raw.md), тріаж — цей розділ |
+| I1 | README посилався на промпт фінального рев'ю, звіт рев'ю й зелений прогін CI Теми 12, яких ще не було (заплановані завершальні кроки) | **Fixed Now**: промпт — у [prompts.txt](prompts.txt), звіт — [review-raw.md](docs/serverless/review-raw.md), тріаж — цей розділ, зелений прогін CI — нижче |
 | M1 | `TestNormalizeCleansUpSubmission` перевіряє нерозривний пробіл і табуляцію, а перенесення рядка, яке теж називає план (Review Focus 1), — ні | **Deferred**: `strings.Fields` обробляє `\n` так само, поведінка та сама |
 | M2 | Запасна гілка в `handler.go` відповідає `data must be a JSON object` | **Deferred**: гілка недосяжна — на цей момент `data` уже синтаксично коректний JSON-об'єкт |
 | M3 | Жанр обрізається й переводиться в нижній регістр, але подвійні пробіли всередині не стискаються, як у назві, лейблі й артистах | **Deferred**: типові жанри — одне слово; це важливо лише для багатослівних жанрів у `ALLOWED_GENRES` |
@@ -803,3 +803,8 @@ Terraform, — [terraform-apply.txt](docs/serverless/albums/terraform-apply.txt)
 
 Дев'ять пунктів, які рецензент свідомо не оцінював (розділ «Declined to judge» звіту), — рішення, ухвалені під час
 роботи; усі лишено як є, з причинами, наведеними там же.
+
+Після виправлень CI зелений: [прогін 39953226052](https://github.com/tatarchuk/golang-course-lesson-12/actions/runs/39953226052)
+на коміті `815c54e` — статичні перевірки (зокрема обов'язкові файли Теми 12 і JWT-guard для `prompts.txt`), міграції,
+тести й smoke-тести застосунку, а в джобі `serverless` для обох Lambda-модулів — `go vet`, `go test -race` (власна
+функція — на Go 1.26.9) і `bash -n` для скриптів.
