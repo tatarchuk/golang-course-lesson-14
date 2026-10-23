@@ -1,0 +1,28 @@
+# make up, first attempt with the demo compose verbatim (only the Floci pin), 2026-10-23
+$ make up
+scripts/up.sh
+▶ Запускаю Floci…
+ Image floci/floci:2.3.0 Pulled 
+ Network libratrack-lambda-demo_default Creating 
+ Network libratrack-lambda-demo_default Creating 
+ Network libratrack-lambda-demo_default Created 
+ Network libratrack-lambda-demo_default Created 
+ Container floci Creating 
+ Container floci Created 
+ Container floci Starting 
+ Container floci Started 
+▶ Чекаю на http://localhost:4566 ............................................................
+✗ Floci не відповідає. Дивіться: docker compose logs floci
+make: *** [Makefile:19: up] Error 1
+exit=2
+
+$ docker compose logs floci   # the cause
+floci floci/floci:2.3.0 Exited (1) 4 minutes ago
+floci  | WARNING: /app/data is not writable by floci (uid 1001).
+floci  | Persisted state cannot be saved there. If FLOCI_STORAGE_MODE (or any
+floci  | per-service storage mode) is not 'memory', Floci will refuse to start.
+floci  | Fix the volume mount permissions (it may be read-only or root-owned) or
+floci  | set FLOCI_STORAGE_PERSISTENT_PATH to a writable directory.
+floci  | 2026-10-23 09:19:18,106 INFO  [io.git.hec.flo.lif.EmulatorLifecycle] Storage:   hybrid  Path: /app/data
+floci  | Caused by: java.lang.IllegalStateException: Persistent storage path '/app/data' is not writable, but non-memory storage is enabled (ssm=hybrid, sqs=hybrid, s3=hybrid, dynamodb=hybrid, sns=hybrid, lambda=hybrid, apigateway=hybrid, iam=hybrid). Fix the volume mount permissions (it may be read-only or root-owned), or point FLOCI_STORAGE_PERSISTENT_PATH at a writable directory.
+floci  | Caused by: java.nio.file.AccessDeniedException: /app/data/.floci-write-probe14306859882881171871.tmp

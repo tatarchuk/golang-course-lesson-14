@@ -10,7 +10,7 @@ services:
       - "4566:4566"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # запуск Lambda-контейнерів
-      - ./.floci-data:/app/data                     # стан переживає перезапуск
+      - floci-data:/app/data                        # стан переживає перезапуск (іменований том, див. нижче)
     environment:
       FLOCI_DEFAULT_REGION: us-east-1
       FLOCI_STORAGE_MODE: hybrid                    # memory | persistent | hybrid | wal
@@ -18,3 +18,9 @@ services:
       # Якщо запити з хоста повертають URL з "localhost", а з інших контейнерів
       # потрібне ім'я сервісу — розкоментуйте:
       # FLOCI_HOSTNAME: floci
+
+# Іменований том замість ./.floci-data: Floci 2.3.0 працює як uid 1001 і не стартує, якщо
+# /app/data недоступний для запису, а тека з хоста (спільна тека VirtualBox, uid 1000, 755)
+# саме така. Новий том Docker успадковує власника /app/data з образу (uid 1001).
+volumes:
+  floci-data:
