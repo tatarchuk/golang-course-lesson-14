@@ -12,7 +12,7 @@ import (
 )
 
 // pageData is what every template receives. The field names are the contract with the
-// templates (prompts.txt, prompt 2.1).
+// templates (prompt 2.1 in the Lesson 10 repository's prompts.txt).
 type pageData struct {
 	Title     string     // the page title block
 	User      *userView  // the signed-in account, nil for an anonymous visitor

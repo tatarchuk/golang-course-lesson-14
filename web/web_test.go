@@ -8,8 +8,9 @@ import (
 	"testing"
 )
 
-// pageData mirrors the data contract of the templates (see prompts.txt, prompt 2.1); the
-// real type lives in internal/handler/web, this copy keeps the package dependency-free.
+// pageData mirrors the data contract of the templates (prompt 2.1 in the Lesson 10
+// repository's prompts.txt); the real type lives in internal/handler/web, this copy keeps the
+// package dependency-free.
 type pageData struct {
 	Title     string
 	User      *struct{ Email, Role string }

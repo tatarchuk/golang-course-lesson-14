@@ -8,13 +8,10 @@ N+1; Тема 9 захистила API: реєстрація і логін з `b
 сторінку каталогу з живим пошуком і видаленням рядків через HTMX, вхід через HttpOnly-cookie, а шаблони,
 статику й міграції вбудовує в один бінарник через `go:embed`.
 
-Умова Теми 10, адаптована під варіант `albums`: [albums_lesson10_homework.md](albums_lesson10_homework.md).
-Звіт про виконання: розділ [Lesson 10 Report](#lesson-10-report-full-stack-go-з-htmx-та-goembed).
-Додаткова частина Теми 10 — DevOps Basics (віртуальна машина з Docker, Floci і k3s, демо з презентації,
-Docker Compose, Kubernetes): умова [albums_lesson10_devops_homework.md](albums_lesson10_devops_homework.md),
-звіт — розділ [Lesson 10 — додаткова частина](#lesson-10--додаткова-частина-devops-basics-vm-docker-floci-k3s).
-Матеріали Теми 9 (умова, промпти, звіт аудиту) лишилися в репозиторії попередньої теми
-(<https://github.com/tatarchuk/golang-course-lesson-9>); її докази збережено тут у [docs/auth/](docs/auth/).
+Матеріали Теми 10 і її додаткової частини DevOps Basics (умови, промпти, звіти) лишилися в репозиторії
+попередньої теми (<https://github.com/tatarchuk/golang-course-lesson-10>); їхні докази збережено тут у
+[docs/web/](docs/web/) і [docs/devops/](docs/devops/). Матеріали Теми 9 (умова, промпти, звіт аудиту) — у
+репозиторії <https://github.com/tatarchuk/golang-course-lesson-9>, її докази — у [docs/auth/](docs/auth/).
 
 ## Швидкий запуск (Docker Compose)
 
@@ -141,7 +138,7 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
 - `internal/app`: e2e через `NewRouter()` і реальну БД: сценарій smoke-тесту CI, граничні випадки
   контракту Теми 7, приймальні тести Теми 9 (`auth_test.go`, `rbac_test.go`) і Теми 10 (`web_test.go`:
   `TestWebCatalogPage`, `TestWebAlbumRowsFragment`, `TestWebDeleteRow`, `TestWebLoginAndLogout`,
-  `TestWebStaticAssets`, `TestWebSecurityHeadersAndRootFallback`; таблиця в розділі [Частина 3](#частина-3-goembed-і-тести));
+  `TestWebStaticAssets`, `TestWebSecurityHeadersAndRootFallback`; таблиця в розділі [Частина 3 звіту Теми 10](https://github.com/tatarchuk/golang-course-lesson-10#частина-3-goembed-і-тести));
   `TestNewRouterPanicsWithoutSecret` фіксує fail fast без секрету.
 - `web`: шаблони розбираються з вбудованої файлової системи так само, як в обробниках (макет і партіали
   один раз, клон на сторінку); сторінка каталогу рендерить рядки, наявність `2/3`, кнопки видалення лише
@@ -153,11 +150,11 @@ scripts/smoke.sh http://localhost:8080        # повтор API + веб smoke-
 CI ([.github/workflows/theme8-check.yml](.github/workflows/theme8-check.yml), тепер «Theme 8 + Theme 9 +
 Theme 10 check») перевіряє структуру файлів, статичні правила, міграції на PostgreSQL, тести з реальною БД і
 smoke-тест API та вебінтерфейсу. Додано для Теми 10. У статичній джобі: обов'язкові файли `web/`,
-`migrations/embed.go`, вебобробники з їхніми тестами, `prompts.txt`; лише `html/template` і жодного з типів
+`migrations/embed.go`, вебобробники з їхніми тестами; лише `html/template` і жодного з типів
 `template.HTML`, `HTMLAttr`, `JS`, `JSStr`, `URL`, `CSS`, `Srcset`; `go:embed` і `fs.Sub` у `web/`, `ParseFS` без `ParseGlob`; вбудовані міграції без `COPY
 migrations` у `Dockerfile`; прапорці cookie (`HttpOnly`, `SameSite=Lax`), `CrossOriginProtection` в `app.go`,
 `CookieAuth` без `Authorization` і `Auth` без cookie; контрольна сума htmx 2.0.11; `COOKIE_SECURE` у
-`.env.example` і `docker-compose.yml`; `make build`; JWT-guard охоплює й `prompts.txt`. В інтеграційній
+`.env.example` і `docker-compose.yml`; `make build`. В інтеграційній
 джобі: статична збірка `CGO_ENABLED=0` з перевіркою `file ... statically linked`, запуск бінарника самого з
 порожньої теки без `MIGRATIONS_PATH` (у лозі має бути `applying the embedded set`) і веб smoke-тест: сторінка
 каталогу й статика, фрагмент за `HX-Request` і `303` без нього, cookie-вхід адміністратора з `#HttpOnly_` у
@@ -209,7 +206,7 @@ Cookie сесії `albums_token` містить той самий HS256 JWT, щ�
 `Authorization: Bearer`), а вебмаршрути не приймають заголовок: дві поверхні аутентифікації не
 перетинаються. Крос-сайтовий запит на будь-який вебмаршрут зі зміною стану відхиляє
 `http.CrossOriginProtection` (перевірка `Sec-Fetch-Site`/`Origin`, Go 1.25) з тим самим конвертом `403`
-`forbidden`. Докладніше в розділі [Частина 1](#частина-1-архітектура-вебшару-та-аудит-автоекранування).
+`forbidden`. Докладніше в розділі [Частина 1 звіту Теми 10](https://github.com/tatarchuk/golang-course-lesson-10#частина-1-архітектура-вебшару-та-аудит-автоекранування).
 
 Відомі обмеження: токен без стану діє до `exp` і після логауту чи видалення акаунта (сторінка й фрагмент показують
 такий акаунт як анонімний, але `DELETE /web/albums/{id}` довіряє ролі з токена, як і staff-маршрути API); на
@@ -411,13 +408,10 @@ docs/                                OpenAPI (swag, BearerAuth), runbook з curl
 scripts/                             initdb/ (бази для тестів), smoke.sh (smoke-тест CI: API з логіном + вебінтерфейс із cookie jar), measure_n1.sh (N+1), render_er.sh
 Dockerfile, docker-compose.yml       образ API з обома бінарниками (/app/api, /app/bootstrap) без теки migrations/ і стек postgres + api (JWT_SECRET обов'язковий, COOKIE_SECURE)
 Makefile, .env.example               щоденні команди (+ bootstrap, build) та приклад конфігурації (COOKIE_SECURE; MIGRATIONS_PATH закоментовано)
-albums_lesson10_homework.md          умова Теми 10, адаптована під варіант albums
-albums_lesson10_devops_homework.md   умова додаткової частини Теми 10 (DevOps Basics), UA + EN
 Vagrantfile                          VM для додаткової частини: Ubuntu 24.04 arm64 (VirtualBox), порти на 127.0.0.1, репозиторій у /app, провізіонери docker-engine, floci, aws-tools, k3s
 deploy/vagrant/                      провізіонери (Docker Engine, AWS CLI + awslocal, k3s), env-status.sh, обхід перевірки портів Vagrant на macOS 27 (port_check_fix.rb + тест)
 deploy/floci/                        Floci (compose.floci.yaml), Demo 1 (demo1-ec2.sh), Demo 2 (demo2-lambda.sh; lambda/ — окремий Go-модуль із тестами)
 deploy/k8s/                          k3s: PostgreSQL (StatefulSet), API (Deployment, NodePort), Ingress (Traefik), bootstrap Job, create-secrets.sh
-prompts.txt                          промпти завдань 2.1, 2.2, 3.1, 3.2 з нотатками про результат
 .github/workflows/theme8-check.yml   CI «Theme 8 + 9 + 10»: структура й статичні правила (html/template, go:embed, cookie), міграції, тести, статичний бінарник з порожньої теки, API + веб smoke-тест
 ```
 
@@ -492,387 +486,4 @@ prompts.txt                          промпти завдань 2.1, 2.2, 3.1
   (`includeIndicatorStyles: false` у `layout.html`), тож політика тримається без `'unsafe-inline'`; статика
   кешується на добу з `nosniff` (`Cache-Control: public, max-age=86400`: у вбудованих файлів немає mtime для
   валідаторів); тіло форми входу обмежене 16 КіБ (`internal/handler/web/auth.go:13,30`). Усе це додано за
-  підсумками [фінального рев'ю](#фінальне-ревю).
-
-## Lesson 10 Report: Full-Stack Go з HTMX та go:embed
-
-Умова: [albums_lesson10_homework.md](albums_lesson10_homework.md). Стан виконання:
-
-| Частина | Що потрібно | Стан |
-|---|---|---|
-| 1. Вручну | архітектура cookie замість `localStorage`, аудит шаблонів (лише `html/template`, без `template.HTML`); тест ізоляції статичного бінарника з порожньої теки | готово (крок 7): розділи нижче, [docs/web/template-audit.txt](docs/web/template-audit.txt), [docs/web/isolation.txt](docs/web/isolation.txt), скриншоти |
-| 2. Промпт-інжиніринг | промпти для шаблонів (`layout`, `catalog`, партіали, `login`) і для HTMX з обробниками (`internal/handler/web`, cookie-сесія); [prompts.txt](prompts.txt) | готово: промпти складено до генерації (крок 1), виконано у кроках 3 і 4 |
-| 3. AI-агент | `go:embed` для шаблонів, статики й міграцій; тести `internal/handler/web/catalog_test.go`; приймальні тести `internal/app/web_test.go` зелені | приймальні тести написано й червоні (крок 1); 3.1 `go:embed` готово (крок 3); 3.2 тести на фейках готово (крок 5) |
-| Додаткова частина: DevOps | VM з Docker, Floci і перевіреним k3s; Demo 1 і 2 з презентації; Compose із базою даних; Kubernetes | готово: розділ [Lesson 10 — додаткова частина](#lesson-10--додаткова-частина-devops-basics-vm-docker-floci-k3s) |
-
-### Частина 1. Архітектура вебшару та аудит автоекранування
-
-**Де живе JWT у браузері.** Вебінтерфейс отримує той самий HS256 JWT, що й API, але не у відповіді JSON,
-а в cookie `albums_token` з прапорцями `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=86400` (= TTL
-токена) і `Secure` за TLS (`COOKIE_SECURE=true`). `localStorage` для серверного застосунку гірший з двох
-причин: будь-який скрипт на сторінці (XSS через необроблений ввід, скомпрометована CDN-бібліотека) читає
-`localStorage` одним викликом і виносить токен, тоді як HttpOnly-cookie недоступна з JavaScript узагалі;
-і токен із `localStorage` довелося б вручну додавати до кожного запиту HTMX, що означає власний
-JavaScript, якого Тема 10 уникає. Ціна cookie — CSRF: браузер додає її автоматично. Тому `SameSite=Lax`
-(cookie не надсилається з крос-сайтових `POST`/`DELETE`), `http.CrossOriginProtection` з Go 1.25
-(перевіряє `Sec-Fetch-Site`/`Origin` для небезпечних методів) і жорстке розділення: API не читає cookie,
-вебмаршрути не читають `Authorization`.
-
-У коді: cookie ставить `sessionCookie` (`internal/handler/web/auth.go:64-74`) після `handler.Authenticate`
-(`internal/handler/authenticate.go`) — тієї самої перевірки, що й в API, тож невідомий e-mail і хибний пароль дають
-побайтово однакову сторінку `401` без `Set-Cookie` (`TestWebLoginAndLogout`); `CookieAuth` читає лише cookie
-(`internal/middleware/cookie.go:16`), `Auth` — лише заголовок; вебгрупа в `internal/app/app.go:88-106` обгорнута
-`http.CrossOriginProtection` з відповіддю-конвертом `403`. Сценарій з реальними відповідями (вхід, cookie з
-`#HttpOnly_` у jar, матриця видалення, логаут): [docs/web/cookie-flow.txt](docs/web/cookie-flow.txt).
-
-**Аудит шаблонів** ([docs/web/template-audit.txt](docs/web/template-audit.txt)). `grep -rn '"text/template"'
---include='*.go' .` і `grep -rnE 'template\.HTML\b' --include='*.go' cmd internal web` порожні: єдине місце розбору
-шаблонів — `internal/handler/web/templates.go` з `html/template.ParseFS`, і жодне значення не позначається як
-безпечний HTML (`template.HTML`, `template.JS`, `template.URL`, `template.HTMLAttr` не використовуються). Контексти
-динамічних значень: назва, виконавці, жанр, лейбл, рік і лічильники — текст у `<td>`; e-mail і роль — текст у
-`<span>`; `q` — значення атрибута `value="..."` поля пошуку; `.ID` — атрибути `id="album-N"` і
-`hx-delete="/web/albums/N"` (int64); повідомлення про помилку входу — текст у `<p>`. Живу перевірку проти бінарника
-зроблено з альбомом `<script>alert("x")</script> & "quotes"` і запитом `?q=<b>x</b>`: у сторінці назва стає
-`&lt;script&gt;alert(&#34;x&#34;)&lt;/script&gt; &amp; &#34;quotes&#34;`, запит у полі — `value="&lt;b&gt;x&lt;/b&gt;"`, а
-фрагмент рядків не містить жодного `<script>`; те саме фіксують `TestCatalogPageRendersRowsAndEscapes` (пакет `web`),
-`TestCatalogPage` (фейки) і `TestWebCatalogPage` (приймальний). CI-перевірки «Only html/template» і «template.HTML
-and the other safe-content types are never used» стежать, щоб так і лишалося.
-
-### Тест ізоляції єдиного бінарника
-
-Рецепт завдання 1.2 і те, що зроблено:
-
-```sh
-make build                                        # CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o bin/api ./cmd/api
-DIR=$(mktemp -d /tmp/verify_albums.XXXXXX) && cp bin/api "$DIR"/ && cd "$DIR"
-set -a; . "$OLDPWD/.env"; set +a; unset MIGRATIONS_PATH     # лише DATABASE_URL і JWT_SECRET мають значення
-./api                                             # ні web/, ні templates/, ні migrations/ поруч немає
-curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/catalog
-curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/app.css
-curl -s -o /dev/null -w '%{http_code} %{content_type}\n' localhost:8080/static/htmx.min.js
-```
-
-Виконано 2026-10-16 ([docs/web/isolation.txt](docs/web/isolation.txt)): `bin/api` (25 МБ, `CGO_ENABLED=0`,
-`-trimpath -ldflags='-s -w'`) скопійовано сам у порожню теку `/tmp/verify_albums.*` і запущено лише з `DATABASE_URL`
-та `JWT_SECRET`; у лозі `migrations: applying the embedded set` і `schema version 3`, після чого `/catalog` →
-`200 text/html` з усіма 10 seed-альбомами, `/catalog?q=kid` → один рядок, `/static/app.css` → `200 text/css`,
-`/static/htmx.min.js` → `200 text/javascript` (52 182 байти, htmx 2.0.11), `/web/albums?q=kid` з `HX-Request` →
-`200` лише `<tr>`, без заголовка → `303` на `/catalog?q=kid`, `/static/` → `404`. На macOS `otool -L` показує лише
-системні бібліотеки (так злінковано кожен Go-бінарник на Darwin, власних залежностей немає), а збірка `GOOS=linux`
-з тими самими прапорцями — `ELF 64-bit ... statically linked`; те саме перевіряє CI (`file bin/api` на Ubuntu і
-запуск із `mktemp -d`). Браузер (headless Chrome 155 проти того самого процесу): [каталог](docs/screenshots/catalog.png),
-[пошук](docs/screenshots/catalog-search.png), [вхід](docs/screenshots/login.png). Живий пошук перевірено в
-Chrome 155 через розширення: введення `kid` у поле оновило таблицю запитом `GET /web/albums` без перезавантаження
-сторінки (адреса лишилася `/catalog`), консоль без помилок і без порушень Content-Security-Policy. SQL-лог однієї
-сторінки: [docs/web/queries-catalog.txt](docs/web/queries-catalog.txt): 5 `SELECT` для анонімного відвідувача, +1 для
-залогіненого.
-
-### Частина 2. Промпти для генерації коду
-
-Промпти складено до генерації і збережено у [prompts.txt](prompts.txt); виконуються в цьому репозиторії
-через Claude Code (Claude Fable 5.1) у порядку 2.1 → 3.1 → 2.2 → 3.2 (обробники 2.2 споживають вбудовані
-файлові системи з 3.1). Код писався test-first: приймальні тести `internal/app/web_test.go` написано першими,
-вони були червоними до кроків 2–4 і зелені відтоді ([до](docs/web/tests-before.txt), [після](docs/web/tests-after.txt)).
-
-**2.1. Макет, сторінка каталогу, партіали, сторінка входу.** Промпт фіксує контракт даних шаблонів
-(`.Title`, `.User`, `.CanDelete`, `.Query`, `.Albums`, `.Error`; рядок з `.ID`, `.Title`, `.Artists`,
-`.Genre`, `.ReleaseYear`, `.Label`, `.Available`, `.Total`, `.CanDelete`), `{{block "content" .}}` і
-`{{block "title" .}}` у `layout.html`, форму пошуку з трьома HTMX-атрибутами, що працює і без JavaScript,
-партіал `album_rows` з порожнім рядком, кнопку видалення лише для `.CanDelete`, заборону `template.HTML`
-і сторінку входу, яка не повертає введений e-mail (однакові тіла для двох видів невдалого входу).
-Результат: згенеровано всі п'ять шаблонів і `web/static/app.css` точно за промптом, без ручних правок;
-`web/static/htmx.min.js` не генерувався — це офіційна мініфікована збірка htmx.org 2.0.11 (npm-тег
-`latest` на 2026-10-16), завантажена дослівно; версію й sha256 зафіксовано в
-[docs/web/htmx.sha256](docs/web/htmx.sha256). До запуску промпту написано тести `web/web_test.go`, які
-розбирають вбудований набір так само, як це робитимуть обробники, і рендерять три сторінки (розділ
-[Тести та перевірки](#тести-та-перевірки)); вони зелені.
-
-**2.2. HTMX-інтерактивність, обробники, cookie-сесія.** Промпт описує `ListOptions.Query` з `ILIKE` і
-екрануванням, `AvailabilityForAlbums` одним запитом, винесення перевірки облікових даних у
-`handler.Authenticate`, `CookieAuth`, пакет `internal/handler/web` (сторінка, фрагмент за `HX-Request`,
-видалення з порожнім `200`, логін/логаут з атрибутами cookie) і реєстрацію вебгрупи в `app.go` під
-`http.CrossOriginProtection`. Результат: частину 1 (репозиторії) виконано кроком 2 ще до шаблонів, решту — кроком 4; обидві частини
-test-first (`internal/repository/catalog_search_test.go`, `internal/middleware/cookie_test.go`,
-`internal/handler/authenticate_test.go` написано до коду). Згенеровано `internal/handler/authenticate.go`
-(`Authenticate` + `ErrInvalidCredentials`; `AuthHandler.Login` тепер викликає його, відповіді й тести часу
-без змін), `internal/middleware/cookie.go`, пакет `internal/handler/web` і вебгрупу в `app.go` під
-`http.CrossOriginProtection` з JSON-конвертом `403`. Ручні відхилення від промпту: `StaticFiles` відповідає
-JSON `404` і для відсутнього файлу, не лише для теки; фрагмент рядків визначає відвідувача тим самим
-пошуком акаунта, що й сторінка (cookie видаленого акаунта рендериться анонімно на сторінці й у фрагменті; маршрут видалення довіряє токену до `exp`); `GET /login` теж
-за `CookieAuth`, щоб залогінений бачив свій акаунт у шапці. Приймальні тести Теми 10 позеленіли з першого
-запуску після реалізації.
-
-### Частина 3. go:embed і тести
-
-**3.1. `go:embed`.** Згенеровано за промптом: `web/templates.go` (`//go:embed templates/*.html
-templates/partials/*.html`, `Templates()` через `fs.Sub`), `web/static.go` (`//go:embed static`, `Static()`
-через `fs.Sub(staticFS, "static")`), `web/doc.go`, `migrations/embed.go` (`//go:embed *.sql`,
-`migrations.FS`), `repository.MigrateFS(dsn, fsys)` з `Migrate(dsn, dir)` як обгорткою над `os.DirFS`,
-перемикач у `cmd/api/main.go` (`applyMigrations`: порожній `MIGRATIONS_PATH` означає вбудований набір, лог
-каже, яке джерело застосовано) і той самий перемикач у `cmd/bootstrap/main.go`, `app.Config{Templates,
-Static, CookieSecure}` із fail fast на `nil`, `COOKIE_SECURE` через `envBool`, ціль `make build`, `Dockerfile`
-без `COPY migrations` і `MIGRATIONS_PATH`, `docker-compose.yml` з `COOKIE_SECURE`, `.env.example` із
-закоментованим `MIGRATIONS_PATH`. Ручні правки: змінну `migrations` в обох `main` перейменовано на
-`migrationsDir`, бо вона затіняла імпортований пакет; `internal/testdb` мігрує з `migrations.FS` і втратив
-`MigrationsDir`. Тести адаптовано вручну: `newRouter` передає `web.Templates()` і `web.Static()`,
-`TestNewRouterPanicsWithoutTemplatesOrStatic`, `TestMigrateFSAppliesTheEmbeddedSet`, дисковий тест `Migrate`
-дивиться на `../../migrations`, тест bootstrap працює без `MIGRATIONS_PATH`. Перевірено: `go test ./...
--race` (червоними лишаються лише приймальні тести Теми 10), `go mod tidy` без змін, `docker compose config
--q`, `docker compose build api`, і запуск `bin/api`, скопійованого самого в порожню теку, без
-`MIGRATIONS_PATH` проти compose-бази: у лозі `migrations: applying the embedded set` і `schema version 3`
-(схему створено з нуля), `GET /health` → `200`, `GET /api/v1/albums` → `200`. Повний тест ізоляції з
-`/catalog` і статикою — у розділі [Тест ізоляції](#тест-ізоляції-єдиного-бінарника) після кроку 4.
-
-**3.2. Тести.** Приймальні тести `internal/app/web_test.go` написано до реалізації; до неї кожен маршрут
-відповідає JSON `404` (повний вивід: [docs/web/tests-before.txt](docs/web/tests-before.txt)):
-
-```text
---- FAIL: TestWebCatalogPage (0.25s)
-    web_test.go:152: expected 200, got 404 {"error":{"code":"not_found","message":"route not found"}}
---- FAIL: TestWebAlbumRowsFragment (0.23s)
---- FAIL: TestWebDeleteRow (0.23s)
---- FAIL: TestWebLoginAndLogout (0.10s)
---- FAIL: TestWebStaticAssets (0.01s)
-FAIL	homework/internal/app	1.568s
-```
-
-| Тест | Що перевіряє |
-|---|---|
-| `TestWebCatalogPage` | `200` HTML з макетом, формою пошуку (`hx-get`, `hx-trigger`, `hx-target`), статикою, усіма альбомами, виконавцями й `2/3` для альбому з трьома примірниками; екранування `<b>` у назві; `?q=` фільтрує і повертається у `value`; кнопки видалення лише для `staff`/`admin` |
-| `TestWebAlbumRowsFragment` | `HX-Request` → лише `<tr>` (без `<html`, `<table`), збіг за назвою і за виконавцем без регістру, екранування у фрагменті, один `<tr class="empty">` без збігів, кнопка видалення лише для `staff`; без заголовка → `303` на `/catalog?q=` |
-| `TestWebDeleteRow` | анонімний `401`, `member` `403`, Bearer-заголовок без cookie `401`, прострочена cookie `401`, `Sec-Fetch-Site: cross-site` `403`; відхилені запити нічого не змінюють; `staff`/`admin` → порожній `200`, альбом і примірники зникли; `404` і `400` для невідомого й нечислового id |
-| `TestWebLoginAndLogout` | форма входу; успішний вхід → `303` і cookie з `HttpOnly`, `SameSite=Lax`, `Path=/`, `Max-Age=86400`, без `Secure`; cookie показує e-mail і роль у шапці; невідомий e-mail і хибний пароль → побайтово однакові `401` без `Set-Cookie`; логаут прострочує cookie |
-| `TestWebStaticAssets` | `app.css` і `htmx.min.js` з правильними типами, `Cache-Control` і `nosniff`, `404` для невідомого файлу, лістинг `/static/` не віддається |
-| `TestWebSecurityHeadersAndRootFallback` | CSP, `X-Frame-Options`, `nosniff` і `Referrer-Policy` на сторінках і їх відсутність в API; `GET /` лишається JSON `404` |
-
-Після реалізації (кроки 2–4) приймальні тести позеленіли, а завдання 3.2 додало табличні тести обробників на
-фейках у `internal/handler/web/catalog_test.go` (`TestCatalogPage`, `TestRowsFragment`, `TestDeleteRow`,
-`TestLoginAndLogout`; 31 підтест без бази, маршрутизація як в `app.go`, тож `PathValue`, `CookieAuth`,
-`RequireRole` і `CrossOriginProtection` працюють як у продакшені). Повний прогін
-([docs/web/tests-after.txt](docs/web/tests-after.txt)):
-
-```text
-$ go test ./... -race -count=1
-ok  	homework/cmd/api	1.823s
-ok  	homework/cmd/bootstrap	4.292s
-?   	homework/docs	[no test files]
-ok  	homework/internal/app	23.150s
-ok  	homework/internal/auth	4.492s
-ok  	homework/internal/handler	10.611s
-ok  	homework/internal/handler/web	5.399s
-ok  	homework/internal/middleware	1.415s
-ok  	homework/internal/model	1.371s
-ok  	homework/internal/repository	23.899s
-?   	homework/internal/testdb	[no test files]
-?   	homework/migrations	[no test files]
-ok  	homework/web	1.388s
-# top-level tests passed: 127, subtests: 168
-```
-
-### Фінальне рев'ю
-
-Коли код і документація були готові, окремий агент (Claude Code, свіжий контекст, лише читання; промпт у
-[prompts.txt](prompts.txt), розділ «Final review») перечитав увесь diff Теми 10, README, умову, докази й CI.
-Необроблений звіт: [docs/web/review-raw.md](docs/web/review-raw.md). Високих знахідок немає; тріаж 13 низьких:
-
-| № | Знахідка | Рішення |
-|---|---|---|
-| 1 | `Scan`-запити GORM логуються через `logger.Recorder`, який ігнорує `ParameterizedQueries`: запит наявності потрапляв у лог зі значеннями (видно в першій версії `queries-catalog.txt`) | **Fixed Now**: `logger.RecorderParamsFilter` у `repository.Open` прибирає параметри; `TestOpenLogsSQLWithoutValues` покриває `Scan`; докази перегенеровано — тепер `$1$` |
-| 2 | Cookie видаленого чи пониженого акаунта діє на маршруті видалення до `exp`, хоча сторінка показує його анонімним | **Documented**: та сама stateless-семантика, що й у staff-маршрутів API; описано у «Відомих обмеженнях» і в «Рішеннях Теми 10» |
-| 3 | `ParseForm` без ліміту тіла (типово 10 МіБ) на неавтентифікованому маршруті з bcrypt; обмеження частоти немає | **Fixed Now** (ліміт 16 КіБ → `400`, тест) / **Tracked**: лімітер частоти для обох маршрутів входу, як і в Темі 9 |
-| 4 | Статика без `Cache-Control` (у вбудованих файлів немає mtime, тож браузер качає htmx щоразу) | **Fixed Now**: `Cache-Control: public, max-age=86400` + `nosniff`, тест і smoke |
-| 5 | Сторінки без CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` | **Fixed Now**: `middleware.SecurityHeaders` на вебгрупі, `includeIndicatorStyles: false` для htmx, тест, smoke, перевірка в браузері |
-| 6 | На `401`/`403`/`404` з маршруту видалення HTMX нічого не показує (рядок лишається) | **Documented** як відоме обмеження; `HX-Retarget` чи розширення `response-targets` — кандидат на наступну тему |
-| 7 | `colspan="7"` у порожньому рядку при шести колонках для відвідувача | **Fixed Now**: `{{if .CanDelete}}7{{else}}6{{end}}`, два тести |
-| 8 | CI-guard ловив лише `template.HTML`, не `HTMLAttr`/`JS`/`URL`/`CSS` | **Fixed Now**: regex розширено в workflow і в аудиті |
-| 9 | `prompts.txt` називав кількість підтестів, якої не було в доказах | **Fixed Now**: `tests-after.txt` тепер містить обидва лічильники, текст виправлено |
-| 10 | Три пункти контракту в умові перевіряв CI, а не тести; `Secure` не мав тесту | **Fixed Now**: тести на `GET /` → JSON `404` і на `Secure`; розділ умови перейменовано на «Що перевіряють тести і CI» |
-| 11 | «5 `SELECT`» без уточнення, що для залогіненого це 6 | **Fixed Now**: уточнено в трьох місцях |
-| 12 | Ліміт 50 рядків каталогу не був у README | **Fixed Now**: у таблиці вебмаршрутів |
-| 13 | Два діапазони рядків у посиланнях file:line зсунуті на один | **Fixed Now** |
-
-Після виправлень: `go test ./... -race` зелений (127 тестів верхнього рівня, 168 підтестів,
-[docs/web/tests-after.txt](docs/web/tests-after.txt)), `scripts/smoke.sh` 102/102
-([docs/web/smoke.txt](docs/web/smoke.txt)), докази в `docs/web/` перегенеровано тим самим скриптом.
-
-## Lesson 10 — додаткова частина: DevOps Basics (VM, Docker, Floci, k3s)
-
-Умова: [albums_lesson10_devops_homework.md](albums_lesson10_devops_homework.md), за презентацією «DevOps
-Basics for GenAI Developers». «Flossy» в умові — це Floci, локальний емулятор AWS (слайди 29–30);
-«демо для застосунків 1 і 2» — Demo 1 (EC2, слайд 32) і Demo 2 (Lambda на Go, слайди 33–36). Стан виконання:
-
-| Частина | Що потрібно | Стан |
-|---|---|---|
-| 1. Середовище (70) | віртуальна машина зі встановленим Docker, запущений Floci, перевірений k3s | готово: [Vagrantfile](Vagrantfile), [vm.txt](docs/devops/vm.txt), [docker.txt](docs/devops/docker.txt), [floci.txt](docs/devops/floci.txt), [k3s.txt](docs/devops/k3s.txt); скриншот [environment.png](docs/screenshots/devops/environment.png) |
-| 1. Демо (70) | Demo 1 і Demo 2 з презентації | готово: [demo1-ec2.txt](docs/devops/demo1-ec2.txt), [demo2-lambda.txt](docs/devops/demo2-lambda.txt); скриншоти [demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png) |
-| 2. Docker Compose (+30) | Go-застосунок у контейнері разом із базою даних у Docker Compose | готово: [Dockerfile](Dockerfile) і [docker-compose.yml](docker-compose.yml) запущено у VM, [compose.txt](docs/devops/compose.txt), smoke 102/102 ([smoke-compose.txt](docs/devops/smoke-compose.txt)); скриншоти [compose-ps.png](docs/screenshots/devops/compose-ps.png) (стек у VM і `/health` з Mac), [compose-browser.png](docs/screenshots/devops/compose-browser.png) (каталог від імені адміністратора) |
-| 3. Kubernetes (**) | розгорнути застосунок у Kubernetes | готово: [deploy/k8s/](deploy/k8s/), [k8s.txt](docs/devops/k8s.txt), smoke 102/102 ([smoke-k8s.txt](docs/devops/smoke-k8s.txt)); скриншоти [k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png) |
-
-### Середовище
-
-Робоча машина — Mac на Apple Silicon (M2 Pro, 16 ГБ). Одна віртуальна машина під Vagrant 2.4.9 і
-VirtualBox 7.2.20 (box `bento/ubuntu-24.04` 202510.26.0, arm64, 4 vCPU, 6 ГБ) запускає все: Docker із
-застосунком у Compose і Floci, а поруч k3s зі своїм containerd. Репозиторій змонтовано у VM як `/app`
-(vboxsf, в обидва боки). Порти переадресовано лише на `127.0.0.1` Mac: 8080 (Compose), 30080 (NodePort
-k3s), 8081 → 80 (Traefik Ingress), 6443 (Kubernetes API). Усе встановлюють ідемпотентні провізіонери
-Vagrantfile; повторний `vagrant provision` нічого не перевстановлює (провізіонер `floci` лише заново
-тягне образ рантайму Lambda за рухомим тегом `al2023`). Відтворюваність перевірено: `vagrant destroy -f &&
-vagrant up` будує все середовище заново за 3 хв 41 с без ручних кроків ([rebuild.txt](docs/devops/rebuild.txt)).
-
-| Компонент | Версія | Де | Перевірка |
-|---|---|---|---|
-| VM | Ubuntu 24.04.3 LTS, aarch64 | [Vagrantfile](Vagrantfile) | [vm.txt](docs/devops/vm.txt), скриншоти [vagrant_run.png](docs/screenshots/devops/vagrant_run.png), [vagrant-ubuntu.png](docs/screenshots/devops/vagrant-ubuntu.png), [virtualbox.png](docs/screenshots/devops/virtualbox.png) |
-| Docker Engine | 29.9.1, Compose v5.6.0 | [deploy/vagrant/docker-engine.sh](deploy/vagrant/docker-engine.sh) | [docker.txt](docs/devops/docker.txt) |
-| Floci | `floci/floci:2.3.0` | [deploy/floci/compose.floci.yaml](deploy/floci/compose.floci.yaml) | [floci.txt](docs/devops/floci.txt) |
-| AWS CLI, awslocal | 2.38.2, 0.22.2 | [deploy/vagrant/aws-tools.sh](deploy/vagrant/aws-tools.sh) | [demo1-ec2.txt](docs/devops/demo1-ec2.txt) |
-| k3s | v1.36.5+k3s1 | [deploy/vagrant/k3s.sh](deploy/vagrant/k3s.sh) | [k3s.txt](docs/devops/k3s.txt) |
-
-### Як відтворити
-
-```sh
-brew install --cask virtualbox vagrant             # потрібен пароль адміністратора macOS
-vagrant up                                         # VM + Docker + Floci + AWS CLI + k3s (усі провізіонери)
-vagrant ssh -c /app/deploy/vagrant/env-status.sh   # VM, контейнери, здоров'я Floci, вузол і поди k3s
-
-# Demo 1 і Demo 2 (Lambda збирається на Mac для linux/arm64)
-vagrant ssh -c /app/deploy/floci/demo1-ec2.sh
-(cd deploy/floci/lambda && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap . && zip function.zip bootstrap)
-vagrant ssh -c /app/deploy/floci/demo2-lambda.sh
-
-# Docker Compose у VM (JWT_SECRET береться з .env, див. «Швидкий запуск»)
-vagrant ssh -c 'docker compose -f /app/docker-compose.yml up -d --build'
-vagrant ssh -c 'docker compose -f /app/docker-compose.yml exec -T -e ADMIN_PASSWORD=Albums-Dev-2026 api /app/bootstrap -email admin@albums.local'
-open http://localhost:8080/catalog
-
-# Kubernetes (k3s): образ у k3s, секрети, маніфести, адміністратор
-vagrant ssh -c 'docker build -t albums-api:1.0 /app'
-vagrant ssh -c 'docker save --platform linux/arm64 -o /tmp/albums-api.tar albums-api:1.0'
-vagrant ssh -c 'sudo k3s ctr -n k8s.io images import /tmp/albums-api.tar'
-vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/namespace.yaml'
-vagrant ssh -c /app/deploy/k8s/create-secrets.sh
-vagrant ssh -c 'kubectl apply -k /app/deploy/k8s'
-vagrant ssh -c 'kubectl -n albums rollout status statefulset/postgres --timeout=300s'
-vagrant ssh -c 'kubectl -n albums rollout status deploy/albums-api --timeout=300s'
-vagrant ssh -c 'kubectl apply -f /app/deploy/k8s/bootstrap-job.yaml'   # лише коли PostgreSQL уже готовий
-vagrant ssh -c 'kubectl -n albums wait --for=condition=complete job/albums-bootstrap --timeout=120s'
-open http://localhost:30080/catalog                # NodePort
-open http://albums.localhost:8081/catalog          # Traefik Ingress (*.localhost браузер веде на 127.0.0.1)
-```
-
-Після `vagrant halt` / `vagrant up` провізіонери не повторюються: Floci повертається сам
-(`restart: unless-stopped`), k3s — сервіс systemd, стек Compose піднімає
-`vagrant ssh -c 'docker compose -f /app/docker-compose.yml up -d'`.
-
-### Рішення
-
-- **arm64 скрізь.** VirtualBox на Apple Silicon запускає лише ARM-гостей, тому box arm64, а не
-  `ubuntu/jammy64` зі слайда 6 (лише amd64). Lambda збирається з `GOARCH=arm64` і створюється з
-  `--architectures arm64`: Floci запускає Lambda в контейнері з архітектурою хоста.
-- **Версії зафіксовано** (слайди 7, 15, 38, 46): box 202510.26.0, `floci/floci:2.3.0`, AWS CLI 2.38.2,
-  awscli-local 0.22.2, k3s v1.36.5+k3s1, образ `albums-api:1.0` для k3s. Без фіксації лишилися пакети
-  Docker Engine з репозиторію Docker (ставиться актуальний 29.x), образ рантайму Lambda
-  `provided:al2023` (рухомий тег AWS) і локальний образ Compose `app-api`, який Compose збирає сам із
-  тегом `latest`.
-- **Floci 2.3.0 замість `hectorvent/floci:latest`.** Образ зі слайда 30 — заморожена збірка 1.5.5 того
-  самого проєкту (він переїхав у `floci-io/floci`); 1.5.5 працює від UID 1001 без доступу до
-  Docker-сокета, а 2.x сам налаштовує сокет і мережу для Lambda. LocalStack не підійшов як запасний
-  варіант: з 2026.03 він вимагає токен акаунта.
-- **EC2 у режимі mock** (`FLOCI_SERVICES_EC2_MOCK=true`). Floci 2.x запускає контейнер на кожен інстанс,
-  а AMI з Demo 1 (`ami-0abcdef1234567892`) у каталозі Floci — Ubuntu 20.04 x86_64, який на arm64 не
-  стартує. Mock дає саме поведінку, описану на слайді 32: інстанс — запис в емуляторі, а не VM.
-- **Demo 2 з викликом функції.** Слайди 33–36 зупиняються на `get-function`; скрипт ще й викликає
-  функцію з `{"name":"albums"}` і з `{}` (обидва `StatusCode 200`), що й доводить виконання коду.
-  Обробник зі слайда 34 покрито двома тестами, написаними до коду; Lambda — окремий Go-модуль
-  (`aws-lambda-go` v1.55.1 вимагає Go 1.26), тож `go ... ./...` кореневого модуля й CI його не збирають.
-- **Секрети поза Git.** `.env` не відстежується; секрети Kubernetes генерує
-  [create-secrets.sh](deploy/k8s/create-secrets.sh) у VM (`~/.albums-k8s.env`, права 600) і
-  повторно використовує, бо PostgreSQL зберігає перший пароль. Пароль БД — hex: `DATABASE_URL` є URL,
-  а застосунок його не кодує.
-- **Kubernetes.** PostgreSQL — StatefulSet із томом local-path за headless Service: стабільне ім'я
-  `postgres-0`, і дані пережили видалення пода (15 альбомів до і після). API — Deployment на 2 репліки:
-  initContainer чекає на `pg_isready` (без нього API завершується після 10 невдалих спроб підключення),
-  probes на `/health`, ліміти ресурсів, `runAsNonRoot` з `runAsUser: 1000` (kubelet перевіряє лише
-  числовий UID), read-only root filesystem. `COOKIE_SECURE=false`, бо в лабораторії HTTP. Ingress
-  маршрутизує за хостом `albums.localhost`, а не за префіксом шляху: UI посилається на кореневі шляхи
-  (`/static`, `/catalog`). Адміністратора створює одноразовий Job.
-- **Образ у k3s без реєстру:** `docker save --platform linux/arm64` + `k3s ctr -n k8s.io images import`,
-  `imagePullPolicy: IfNotPresent`. У VM голий `ctr` належить containerd Docker'а, тому лише `k3s ctr`.
-- **Обхід для Vagrant на macOS 27** ([port_check_fix.rb](deploy/vagrant/port_check_fix.rb)). Vagrant
-  2.4.9 перевіряє, чи зайнятий порт хоста, неблокуючим `connect` з тайм-аутом, а на macOS 27 такий
-  `connect` повідомляє про успіх навіть для відхиленого з'єднання (відтворено вбудованим Ruby Vagrant і
-  системним Ruby, у пісочниці й поза нею). Тож кожен порт, навіть SSH 2222, «зайнятий», і `vagrant up`
-  зупиняється з `ForwardPortCollision`. Виправлення — блокуючий `connect` з тайм-аутом 1 с;
-  [port_check_test.rb](deploy/vagrant/port_check_test.rb) перевіряє обидва напрями (закритий порт
-  вільний, порт зі слухачем зайнятий). Відтворення — у [vm.txt](docs/devops/vm.txt).
-- **kubeconfig (слайд 40).** `kubectl` у VM — це сам k3s, і без `KUBECONFIG` він читає
-  адміністративний `/etc/rancher/k3s/k3s.yaml` (доступний лише root), а не `~/.kube/config`.
-  Провізіонер копіює kubeconfig користувачеві `vagrant` і додає `KUBECONFIG` у `/etc/environment`.
-
-### Що в презентації не спрацювало як написано
-
-| Слайд | У презентації | Що виявилося | Як зроблено тут |
-|---|---|---|---|
-| 6 | box `ubuntu/jammy64` | лише amd64, на Apple Silicon не завантажується | `bento/ubuntu-24.04` arm64 |
-| 6 | `apt-get install -y golang` | у Ubuntu 22.04 це Go 1.18, а модуль albums вимагає Go 1.25.11 | збірка в Docker (`golang:1.25-alpine`, `GOTOOLCHAIN=auto`) |
-| 16 | стретч-мета: `HEALTHCHECK` для образу на `distroless/static` | у distroless немає shell, curl і wget | runtime-образ albums — alpine; здоров'я перевіряють `/health` і probes Kubernetes |
-| 25 | Terraform посилається на `aws_iam_role.lambda` | ресурс ролі ніде не визначено | Terraform умова не вимагає |
-| 30 | `hectorvent/floci:latest` | заморожена 1.5.5, без доступу до Docker-сокета на Linux | `floci/floci:2.3.0` |
-| 31 | IAM-політика `Version = "2026-10-17"`, `Service = "://amazonaws.com"` | версія має бути `2012-10-17`, сервіс — напр. `lambda.amazonaws.com`; справжній AWS таке відхилить | Terraform умова не вимагає |
-| 32 | AMI `ami-0abcdef1234567892` | у Floci 2.x це x86_64, на arm64 інстанс завершується | EC2 у режимі mock |
-| 35 | `GOARCH=amd64` | на arm64-VM Floci не виконає amd64-бінарник | `GOARCH=arm64`, `--architectures arm64` |
-| 36 | демо закінчується на `get-function` | виконання коду не показано | два виклики `invoke` |
-| 37 | `awslocal logs tail` | Floci 2.3.0 створює групу й потоки логів, але подій не пише (storedBytes 0) | показано в доказах, Demo 3 умова не вимагає |
-| 40 | копія kubeconfig у `~/.kube/config` | `kubectl` від k3s її не читає без `KUBECONFIG` | провізіонер задає `KUBECONFIG` |
-| 42–43 | секрет `llm` створюється двічі: з ключем `key` і з ключем `LLM_API_KEY` | другий `create` падає (`already exists`); `envFrom` бере імена змінних із ключів | `create-secrets.sh`: ключі = імена змінних, `--dry-run=client -o yaml \| kubectl apply` |
-
-### Докази
-
-- [docs/devops/vm.txt](docs/devops/vm.txt): VM (aarch64, Ubuntu 24.04.3, 4 CPU, 5,8 ГБ, `/app` через
-  vboxsf) і відтворення проблеми з перевіркою портів.
-- [docs/devops/docker.txt](docs/devops/docker.txt): Docker Engine 29.9.1, Compose v5.6.0, `hello-world`,
-  повторний провізіонер.
-- [docs/devops/compose.txt](docs/devops/compose.txt),
-  [docs/devops/smoke-compose.txt](docs/devops/smoke-compose.txt): стек Compose у VM (образ 16,3 МБ,
-  міграції, адміністратор), запити з Mac через переадресований порт, smoke 102/102.
-- [docs/devops/floci.txt](docs/devops/floci.txt): Floci 2.3.0, `ec2`/`lambda`/`logs` running, образ
-  Lambda `linux/arm64`.
-- [docs/devops/demo1-ec2.txt](docs/devops/demo1-ec2.txt): ключ, каталог AMI, інстанс `running`;
-  `awslocal` = `aws --endpoint-url http://localhost:4566`.
-- [docs/devops/demo2-lambda.txt](docs/devops/demo2-lambda.txt): функція Active на arm64, два виклики
-  з відповідями обробника, контейнер Lambda.
-- [docs/devops/k3s.txt](docs/devops/k3s.txt): вузол Ready (arm64), системні поди, local-path, DNS
-  кластера, Docker і k3s поруч.
-- [docs/devops/k8s.txt](docs/devops/k8s.txt), [docs/devops/smoke-k8s.txt](docs/devops/smoke-k8s.txt):
-  розгортання, NodePort і Ingress з Mac, вхід через cookie, самовідновлення, збереження даних,
-  smoke 102/102.
-- [docs/devops/rebuild.txt](docs/devops/rebuild.txt): відтворюваність — `vagrant destroy -f && vagrant up`
-  за 3 хв 41 с заново ставить Docker, Floci, AWS CLI і k3s (awscli-local 0.22.2), стан середовища після.
-- Скриншоти в [docs/screenshots/devops/](docs/screenshots/devops/): VM ([vagrant_run.png](docs/screenshots/devops/vagrant_run.png),
-  [vagrant-ubuntu.png](docs/screenshots/devops/vagrant-ubuntu.png), [virtualbox.png](docs/screenshots/devops/virtualbox.png)),
-  усе середовище ([environment.png](docs/screenshots/devops/environment.png)), демо
-  ([demo1-ec2.png](docs/screenshots/devops/demo1-ec2.png), [demo2-lambda.png](docs/screenshots/devops/demo2-lambda.png)),
-  Compose ([compose-ps.png](docs/screenshots/devops/compose-ps.png),
-  [compose-browser.png](docs/screenshots/devops/compose-browser.png)), Kubernetes
-  ([k8s-pods.png](docs/screenshots/devops/k8s-pods.png), [k8s-browser.png](docs/screenshots/devops/k8s-browser.png)).
-
-### Фінальне рев'ю
-
-Коли все було готово, окремий агент (Claude Code, свіжий контекст, Opus, лише читання репозиторію й
-запущеної VM) перечитав увесь diff гілки разом з умовою, презентацією, планом і журналом рішень.
-Необроблений звіт: [docs/devops/review-raw.md](docs/devops/review-raw.md). Критичних знахідок немає;
-усі п'ять ризиків з плану закрито, кластер збігається із закомітженими маніфестами (`kubectl diff`
-порожній), секретів у репозиторії немає. Тріаж:
-
-| № | Знахідка | Рішення |
-|---|---|---|
-| I1 | Скриншоти Compose збігалися байт у байт із рендерами Теми 10 (та сама сторінка, ті самі дані), а запланованого `compose-ps.png` не було | **Fixed Now**: [compose-ps.png](docs/screenshots/devops/compose-ps.png) (стек у VM і `/health` з Mac) і [compose-browser.png](docs/screenshots/devops/compose-browser.png) (каталог від імені адміністратора); дублікати видалено |
-| M1 | В умові був шлях `docs/screenshots/devops-*.png`, якого немає | **Fixed Now**: `docs/screenshots/devops/` в обох половинах |
-| M2 | README обіцяв, що `latest` ніде не використовується і що повторний provision нічого не змінює | **Fixed Now**: awscli-local зафіксовано (0.22.2), у «Рішеннях» перелічено, що зафіксовано, а що ні |
-| M3 | У «Як відтворити» Job адміністратора стартував, не чекаючи PostgreSQL | **Fixed Now**, підвищено до важливої (читач міг лишитися без входу): очікування обох rollout і завершення Job, як у перевіреному прогоні |
-| M4 | Вбудований провізіонер `floci` не зупинявся на першій помилці | **Fixed Now**: `set -euo pipefail` |
-| M5 | Обхід перевірки портів не прив'язаний до версії Vagrant | **Documented**: перевірено на Vagrant 2.4.9; прибрати, коли перевірку виправлять у Vagrant або macOS |
-| — | Повний `vagrant up` з нуля жодного разу не запускався | **Fixed Now**: `vagrant destroy -f && vagrant up` — 3 хв 41 с, [rebuild.txt](docs/devops/rebuild.txt) |
-| — | CI не перевіряє скрипти й маніфести DevOps і не запускає тести Lambda | **Tracked**: кандидати — `bash -n` для `deploy/**/*.sh`, `docker compose config` для Floci, `go -C deploy/floci/lambda test` |
-
-Після виправлень CI зелений: [прогін 39427373820](https://github.com/tatarchuk/golang-course-lesson-10/actions/runs/39427373820)
-(статичні перевірки, зокрема нові обов'язкові файли й `gofmt` для модуля Lambda; міграції, тести, smoke API).
+  підсумками [фінального рев'ю Теми 10](https://github.com/tatarchuk/golang-course-lesson-10#фінальне-ревю).

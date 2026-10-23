@@ -89,8 +89,7 @@ jobs:
             migrations/embed.go internal/middleware/cookie.go internal/handler/authenticate.go
             internal/handler/web/handler.go internal/handler/web/catalog.go internal/handler/web/auth.go
             internal/handler/web/catalog_test.go internal/handler/web/fakes_test.go internal/app/web_test.go
-            README.md prompts.txt albums_lesson10_homework.md
-            albums_lesson10_devops_homework.md Vagrantfile deploy/floci/compose.floci.yaml deploy/k8s/kustomization.yaml
+            README.md Vagrantfile deploy/floci/compose.floci.yaml deploy/k8s/kustomization.yaml
           )
           missing=""
           for f in "${required[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
@@ -145,8 +144,8 @@ jobs:
           check "docker-compose.yml passes JWT_SECRET to the api" grep -q 'JWT_SECRET' docker-compose.yml
           auth_before_role() { grep -q 'protected(middleware.RequireRole' internal/app/app.go; }
           check "app.go wraps RequireRole inside Auth (Auth runs first)" auth_before_role
-          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md prompts.txt; }
-          check "No JWT committed under docs/, in the README or in prompts.txt" no_tokens_in_docs
+          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md; }
+          check "No JWT committed under docs/ or in the README" no_tokens_in_docs
 
           # Theme 10: web UI, embedding, cookie session
           header "Theme 10: static checks"
