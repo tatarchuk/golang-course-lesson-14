@@ -8,6 +8,8 @@ serverless-частина. Усе це зроблено в Темах 8–12 к�
 довідник API (ендпоінти, ролі, приклади запитів) лишився в його README. Приклади з презентації Теми 14 — в окремому
 репозиторії [golang-course-lesson-14-examples](https://github.com/tatarchuk/golang-course-lesson-14-examples).
 
+Умова Теми 14, адаптована під варіант `albums`, для обох репозиторіїв: [albums_lesson14_homework.md](albums_lesson14_homework.md).
+
 ## Як запустити
 
 Заповнюється в міру виконання.
