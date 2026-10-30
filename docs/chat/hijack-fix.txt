@@ -1,0 +1,36 @@
+Step 2.2 (Lesson 14): the blocker found while planning. middleware.Logging wraps the response writer in
+statusWriter, which had no Hijack method, and gorilla/websocket v1.5.3 upgrades with w.(http.Hijacker): every
+WebSocket upgrade behind Logging failed with a 500. TestLoggingPassesHijackerThrough was written first.
+Recorded on the Mac, 2026-10-30.
+
+1. Before the fix (internal/middleware/logging.go as in Lesson 12):
+
+$ go test -race -count=1 -run '^TestLoggingPassesHijackerThrough$' ./internal/middleware
+--- FAIL: TestLoggingPassesHijackerThrough (0.00s)
+    middleware_test.go:84: upgrade through Logging: websocket: bad handshake (HTTP 500)
+FAIL
+FAIL	homework/internal/middleware	0.328s
+FAIL
+[exit 1]
+
+2. After the fix (statusWriter.Hijack records the 101, statusWriter.Unwrap for http.NewResponseController):
+
+$ go test -race -count=1 -v ./internal/middleware 2>&1 | grep -E '^(--- |ok|FAIL)'
+--- PASS: TestAuthRejectsBadCredentials (0.00s)
+--- PASS: TestAuthStoresClaimsAndCallsNext (0.00s)
+--- PASS: TestRequireRole (0.00s)
+--- PASS: TestCORSAllowsTheAuthorizationHeader (0.00s)
+--- PASS: TestCookieAuthIdentifiesTheVisitorFromTheCookieOnly (0.00s)
+--- PASS: TestCookieAuthWithRequireRole (0.00s)
+--- PASS: TestLoggingPassesHijackerThrough (0.01s)
+--- PASS: TestRecoverTurnsPanicIntoJSON500 (0.00s)
+--- PASS: TestRecoverPassesNormalResponsesThrough (0.00s)
+--- PASS: TestCORSAnswersPreflightWithoutCallingNext (0.00s)
+--- PASS: TestCORSAddsHeaderToNormalResponses (0.00s)
+--- PASS: TestLoggingRecordsMethodPathAndStatus (0.00s)
+--- PASS: TestLoggingReports200WhenWriteHeaderIsNeverCalled (0.00s)
+--- PASS: TestChainKeepsCORSHeadersOnPanic (0.00s)
+--- PASS: TestSecurityHeadersAreSetOnEveryResponse (0.00s)
+ok  	homework/internal/middleware	1.441s
+[exit 0]
+

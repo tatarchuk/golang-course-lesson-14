@@ -8,7 +8,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // okHandler is a downstream handler that writes a 201 with a small JSON body.
@@ -27,6 +31,67 @@ func captureLog(t *testing.T) *bytes.Buffer {
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	return &buf
+}
+
+// syncLog is captureLog for a handler that logs from the server's goroutine while the test
+// reads: every access goes through a mutex.
+type syncLog struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncLog) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncLog) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
+}
+
+func captureSyncLog(t *testing.T) *syncLog {
+	t.Helper()
+	s := &syncLog{}
+	log.SetOutput(s)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	return s
+}
+
+// TestLoggingPassesHijackerThrough (Lesson 14): gorilla/websocket upgrades a connection
+// through w.(http.Hijacker), so the writer Logging wraps around the response must still
+// hijack, and the log line reports the 101 the client got.
+func TestLoggingPassesHijackerThrough(t *testing.T) {
+	logs := captureSyncLog(t)
+	var upgrader websocket.Upgrader
+	srv := httptest.NewServer(Logging(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return // Upgrade has already answered with an HTTP error
+		}
+		_ = conn.Close()
+	})))
+	defer srv.Close()
+
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws", nil)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("upgrade through Logging: %v (HTTP %d)", err, status)
+	}
+	_ = conn.Close()
+
+	deadline := time.Now().Add(time.Second)
+	for !strings.Contains(logs.String(), "GET /ws -> 101") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !strings.Contains(logs.String(), "GET /ws -> 101") {
+		t.Fatalf("log %q does not report the 101", logs.String())
+	}
 }
 
 func TestRecoverTurnsPanicIntoJSON500(t *testing.T) {
