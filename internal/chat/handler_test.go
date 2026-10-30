@@ -100,7 +100,7 @@ func TestTextValidation(t *testing.T) {
 
 	for input, want := range map[string]string{
 		`{"text":"   "}`: "empty",
-		`{"text":"` + strings.Repeat("ж", 1001) + `"}`: "1000",
+		`{"text":"` + strings.Repeat("\u0436", 1001) + `"}`: "1000", // two bytes per rune: over 1000 runes, under 4096 bytes
 		`not json`: "JSON",
 	} {
 		send(t, alice, input)
