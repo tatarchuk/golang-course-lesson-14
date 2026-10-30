@@ -1,0 +1,41 @@
+History of this repository: Lesson 12 clone with the work e-mail replaced (2026-10-30)
+
+Source: ~/repo/golang-course-lesson-12, branch main, head db4f802 ("docs: link to the green CI run of
+Lesson 12"), 84 commits, cloned locally. Goal: no work e-mail address as author or committer; names,
+dates, messages and trees unchanged. The old address is written as <work e-mail> in this file.
+
+$ git log main --format='%ae %ce' | sort | uniq -c          # before
+   1 oleksandr.tatarchuk@gmail.com noreply@github.com
+  83 <work e-mail> <work e-mail>
+
+$ FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --env-filter '<if GIT_AUTHOR_EMAIL or
+  GIT_COMMITTER_EMAIL is <work e-mail>, set it to oleksandr.tatarchuk@gmail.com>' -- main
+Ref 'refs/heads/main' was rewritten
+
+$ git log main --format='%ae %ce' | sort | uniq -c          # after
+   1 oleksandr.tatarchuk@gmail.com noreply@github.com
+  83 oleksandr.tatarchuk@gmail.com oleksandr.tatarchuk@gmail.com
+
+$ git rev-list --count main
+84
+
+$ git rev-parse db4f802^{tree} main^{tree}
+c94bc2ce9a9f6537e668e3e25cd8a9f82aa76d42
+c94bc2ce9a9f6537e668e3e25cd8a9f82aa76d42
+
+$ git diff --quiet db4f802 main && echo empty
+empty
+
+$ git log --format='%an|%ad|%cn|%cd%n%B' --date=raw   # old head vs new head, compared with cmp
+identical (576 lines)
+
+The rewritten head is 82d08e8. Commit hashes quoted in the Lesson 8-12 evidence under docs/ are the
+hashes of golang-course-lesson-12 (and earlier lesson repositories), where they still resolve.
+
+$ git update-ref -d refs/original/refs/heads/main
+$ git remote remove origin
+$ git reflog expire --expire=now --all && git gc -q --prune=now
+$ git for-each-ref --format='%(refname)'
+refs/heads/main
+$ git cat-file -t db4f802
+fatal: Not a valid object name db4f802

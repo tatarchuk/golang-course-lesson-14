@@ -1,8 +1,9 @@
-name: Theme 8 + Theme 9 + Theme 10 + Theme 12 check
+name: Theme 8 + Theme 9 + Theme 10 + Theme 12 + Theme 14 check
 
 # CI of the course project: Theme 8 (PostgreSQL, GORM, migrations, N+1), Theme 9 (bcrypt, JWT, RBAC),
-# Theme 10 (html/template + htmx web UI, HttpOnly cookie session, go:embed single binary) and Theme 12
-# (serverless: vet and tests of the two Lambda modules under serverless/) checks.
+# Theme 10 (html/template + htmx web UI, HttpOnly cookie session, go:embed single binary), Theme 12
+# (serverless: vet and tests of the two Lambda modules under serverless/) and Theme 14 (live chat over
+# WebSockets) checks.
 # Every check is reported in the job summary (Actions -> run -> Summary) as PASS/FAIL;
 # a step fails at the END if at least one check failed, so one run shows all problems.
 #
@@ -90,8 +91,8 @@ jobs:
             migrations/embed.go internal/middleware/cookie.go internal/handler/authenticate.go
             internal/handler/web/handler.go internal/handler/web/catalog.go internal/handler/web/auth.go
             internal/handler/web/catalog_test.go internal/handler/web/fakes_test.go internal/app/web_test.go
-            README.md albums_lesson12_homework.md Vagrantfile deploy/floci/compose.floci.yaml deploy/k8s/kustomization.yaml
-            prompts.txt serverless/Vagrantfile serverless/libratrack-lambda-demo/Makefile serverless/albums-lambda/go.mod
+            README.md Vagrantfile deploy/floci/compose.floci.yaml deploy/k8s/kustomization.yaml
+            serverless/Vagrantfile serverless/libratrack-lambda-demo/Makefile serverless/albums-lambda/go.mod
             serverless/albums-lambda/template.yaml serverless/albums-lambda/cmd/webhook/handler.go
             serverless/albums-lambda/cmd/webhook/album.go serverless/albums-lambda/events/valid.json
             serverless/albums-lambda/events/invalid.json serverless/albums-lambda/terraform/main.tf
@@ -151,7 +152,7 @@ jobs:
           check "docker-compose.yml passes JWT_SECRET to the api" grep -q 'JWT_SECRET' docker-compose.yml
           auth_before_role() { grep -q 'protected(middleware.RequireRole' internal/app/app.go; }
           check "app.go wraps RequireRole inside Auth (Auth runs first)" auth_before_role
-          no_tokens_in_docs() { ! grep -rEq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md prompts.txt; }
+          no_tokens_in_docs() { ! grep -rEqs 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' docs README.md prompts.txt; }
           check "No JWT committed under docs/, in the README or in prompts.txt" no_tokens_in_docs
 
           # Theme 10: web UI, embedding, cookie session
