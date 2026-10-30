@@ -3,6 +3,9 @@
 # - an arm64 box: VirtualBox on Apple Silicon runs ARM guests only, and ubuntu/jammy64 is amd64-only;
 # - the box version is pinned (slide 6: "Pin the box version for repeatable results");
 # - every forwarded port listens on the Mac's loopback interface only.
+# Lesson 14 (live chat): the VM is named albums-lesson14, because VirtualBox already holds the Lesson 10
+# VM as albums-devops, and the "go" provisioner adds Go and a C compiler for `make test` (with -race)
+# and `make bootstrap` in the VM. The chat needs only: vagrant up --provision-with docker-engine,go
 
 # macOS 27: Vagrant's host-port probe reports every port as taken; see the file for details.
 require_relative "deploy/vagrant/port_check_fix"
@@ -11,10 +14,10 @@ Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-24.04"
   config.vm.box_version = "202510.26.0"
   config.vm.box_architecture = "arm64"
-  config.vm.hostname = "albums-devops"
+  config.vm.hostname = "albums-lesson14"
 
   config.vm.provider "virtualbox" do |vb|
-    vb.name = "albums-devops"
+    vb.name = "albums-lesson14"
     vb.memory = 6144
     vb.cpus = 4
   end
@@ -32,6 +35,8 @@ Vagrant.configure("2") do |config|
   # Provisioners: idempotent setup scripts that run on the first `vagrant up` and on
   # `vagrant provision [--provision-with NAME]` (slides 5 and 7).
   config.vm.provision "docker-engine", type: "shell", path: "deploy/vagrant/docker-engine.sh"
+  # Lesson 14: Go and a C compiler for the tests with -race and for `make bootstrap`.
+  config.vm.provision "go", type: "shell", path: "deploy/vagrant/go.sh"
   # Floci, the AWS emulator (slides 29-30), and the Lambda runtime image it starts for Demo 2.
   # `up -d` leaves a running container untouched, so this is safe to re-run.
   config.vm.provision "floci", type: "shell", inline: <<~SH

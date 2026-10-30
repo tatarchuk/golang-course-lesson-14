@@ -1,0 +1,26 @@
+Environment of the Lesson 14 chat run (2026-10-30). Docker, PostgreSQL and the tests run in the Vagrant VM
+albums-lesson14 (repo-root Vagrantfile, provisioners docker-engine and go only: vagrant up --provision-with
+docker-engine,go); the repository is mounted at /app; ports 8080 (API) forwarded to the Mac's 127.0.0.1.
+The browsers and bin/chatload run on the Mac.
+
+$ vagrant --version; VBoxManage --version     # on the Mac
+Vagrant 2.4.9
+7.2.20r175154
+
+# inside the VM (vagrant ssh -c ...)
+$ lsb_release -ds; uname -m; nproc; free -h | head -2
+Ubuntu 24.04.3 LTS
+aarch64
+4
+               total        used        free      shared  buff/cache   available
+Mem:           5.6Gi       440Mi       3.6Gi       4.9Mi       1.8Gi       5.2Gi
+$ docker --version; docker compose version; go version; gcc --version | head -1
+Docker version 29.9.2, build a82e528
+Docker Compose version v5.6.1
+go version go1.27.3 linux/arm64
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+
+$ sw_vers -productVersion; go version     # on the Mac
+27.2
+go version go1.27.1 darwin/arm64
+Chrome 156.0.8078.74, Safari 27.2

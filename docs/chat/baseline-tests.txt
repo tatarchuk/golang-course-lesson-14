@@ -1,0 +1,33 @@
+Step 2.1: the Lesson 12 app (plus the Hijack fix of step 2.2) in the new VM, before any chat code. Recorded
+2026-10-30 in the VM albums-lesson14 (docs/chat/environment.txt).
+
+1. A fresh database volume, the Compose stack, the administrator (vagrant ssh -c "cd /app && ..."):
+
+$ docker compose down -v && make up && make bootstrap
+ Container app-postgres-1 Healthy 
+ Container app-api-1 Started 
+health: {"status":"ok"}
+2026/10/30 11:24:02 migrations: schema version 3 (dirty=false)
+administrator admin@albums.local is ready (id 1)
+
+2. Every test of the module with the race detector and the test database. The chat package is excluded: its tests of step 2.3 were already on disk and have no code yet (that red run is docs/chat/tests-before.txt).
+
+$ set -a; . ./.env; set +a     # what make test does: TEST_DATABASE_URL=postgres://***@localhost:5432/albums_test?sslmode=disable
+$ go test -race -count=1 -v $(go list ./... | grep -v internal/chat) | grep -E "^(ok|FAIL|---|\?)"    # make test without the chat package of step 2.3
+PASS lines: 296
+SKIP lines: 0
+FAIL lines: 0
+ok  	homework/cmd/api	1.016s
+ok  	homework/cmd/bootstrap	3.734s
+?   	homework/docs	[no test files]
+ok  	homework/internal/app	23.040s
+ok  	homework/internal/auth	4.235s
+ok  	homework/internal/handler	10.679s
+ok  	homework/internal/handler/web	4.974s
+ok  	homework/internal/middleware	1.021s
+ok  	homework/internal/model	1.013s
+ok  	homework/internal/repository	17.174s
+?   	homework/internal/testdb	[no test files]
+?   	homework/migrations	[no test files]
+ok  	homework/web	1.011s
+[exit 0]
