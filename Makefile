@@ -1,4 +1,4 @@
-.PHONY: help up down db logs run build bootstrap test migrate-up migrate-down swagger measure er
+.PHONY: help up down db logs run build bootstrap test migrate-up migrate-down swagger measure chatload er
 .DEFAULT_GOAL := help
 
 COMPOSE ?= docker compose
@@ -48,6 +48,9 @@ swagger:       ## regenerate docs/ from the handler annotations
 
 measure:       ## N+1 evidence: SELECT count and latency of GET /api/v1/albums (api on the host, log in app.log)
 	scripts/measure_n1.sh http://localhost:8080 app.log
+
+chatload:      ## connect/disconnect cycles against the chat (admin from .env), e.g. ARGS="-clients 50 -cycles 10"
+	go run ./cmd/chatload $(ARGS)
 
 er:            ## render docs/er.svg from docs/er.puml (needs plantuml)
 	scripts/render_er.sh

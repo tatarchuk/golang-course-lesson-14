@@ -1,0 +1,52 @@
+Step 2.4: the whole module after the chat, in the VM with the race detector and the test database
+(docs/chat/environment.txt). Baseline before the chat: 296 PASS (docs/chat/baseline-tests.txt). Recorded 2026-10-30.
+
+$ make test     # go test ./... -race -count=1 with TEST_DATABASE_URL from .env, here with -v for the counts
+PASS lines: 324, SKIP lines: 0, FAIL lines: 0
+ok  	homework/cmd/api	1.032s
+ok  	homework/cmd/bootstrap	3.778s
+?   	homework/cmd/chatload	[no test files]
+?   	homework/docs	[no test files]
+ok  	homework/internal/app	25.087s
+ok  	homework/internal/auth	4.275s
+ok  	homework/internal/chat	2.655s
+ok  	homework/internal/handler	10.966s
+ok  	homework/internal/handler/web	5.183s
+ok  	homework/internal/middleware	1.024s
+ok  	homework/internal/model	1.011s
+ok  	homework/internal/repository	19.331s
+?   	homework/internal/testdb	[no test files]
+?   	homework/migrations	[no test files]
+ok  	homework/web	1.013s
+[exit 0]
+
+The Lesson 14 tests in this run:
+--- PASS: TestChatRoutesWired (0.70s)
+--- PASS: TestAlbumCreateNotifiesChat (0.69s)
+--- PASS: TestNewRouterPanicsWithoutChatHub (0.00s)
+--- PASS: TestRoomsAreIsolated (0.00s)
+--- PASS: TestHistoryReplayedOnJoin (0.00s)
+--- PASS: TestPresenceCountsOnline (0.00s)
+--- PASS: TestStuckClientDropped (0.00s)
+--- PASS: TestShutdownIsIdempotentAndUnblocks (0.00s)
+--- PASS: TestOptionsValidate (0.00s)
+--- PASS: TestRoomsFor (0.00s)
+--- PASS: TestNotifyOnCreate (0.00s)
+--- PASS: TestNotifyOnDelete (0.00s)
+--- PASS: TestNoNoticeOnError (0.00s)
+--- PASS: TestThreeClientsEchoOnce (0.60s)
+--- PASS: TestAuthorComesFromAccount (0.20s)
+--- PASS: TestRoomAccess (0.01s)
+--- PASS: TestForeignOriginRejected (0.00s)
+--- PASS: TestTextValidation (0.20s)
+--- PASS: TestAbruptDisconnectUnregisters (0.01s)
+--- PASS: TestDeadPeerTimesOut (0.31s)
+--- PASS: TestConnectDisconnectCyclesNoLeak (0.29s)
+--- PASS: TestShutdownClosesClientsWithGoingAway (0.00s)
+--- PASS: TestChatPageRedirectsAnonymous (0.00s)
+--- PASS: TestChatPageRoomsByRole (0.00s)
+    --- PASS: TestChatPageRoomsByRole/a_member_sees_general_only (0.00s)
+    --- PASS: TestChatPageRoomsByRole/staff_see_both_rooms (0.00s)
+    --- PASS: TestChatPageRoomsByRole/a_member_who_asks_for_the_staff_room_gets_general (0.00s)
+--- PASS: TestChatPageScriptOnly (0.00s)
+--- PASS: TestLoggingPassesHijackerThrough (0.00s)

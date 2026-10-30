@@ -238,6 +238,7 @@ func (fx *fixture) server() http.Handler {
 	mux.Handle("POST /logout", csrf.Handler(http.HandlerFunc(h.Logout)))
 	mux.Handle("GET /web/albums", csrf.Handler(cookie(http.HandlerFunc(h.Rows))))
 	mux.Handle("DELETE /web/albums/{id}", csrf.Handler(staff(h.Delete)))
+	mux.Handle("GET /chat", csrf.Handler(cookie(http.HandlerFunc(h.Chat))))
 	mux.Handle("GET /static/", StaticFiles(webfs.Static()))
 	return mux
 }

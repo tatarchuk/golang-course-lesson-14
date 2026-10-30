@@ -1,0 +1,34 @@
+Step 2.3: the chat tests written before the chat code (red run), in the VM with the test database.
+Expected: internal/chat, internal/handler/web and internal/app fail to build (no chat package, no
+Handler.Chat, no app.Config.Chat); every other package passes. The output is filtered for reading
+(sort -u | head), so compiler lines are a sample; the [exit] line is make test's. Recorded 2026-10-30.
+
+$ make test
+?   	homework/docs	[no test files]
+?   	homework/internal/testdb	[no test files]
+?   	homework/migrations	[no test files]
+FAIL
+FAIL	homework/internal/app [build failed]
+FAIL	homework/internal/chat [build failed]
+FAIL	homework/internal/handler/web [build failed]
+internal/chat/hub_test.go:117:17: undefined: Message
+internal/chat/hub_test.go:124:16: too many errors
+internal/chat/hub_test.go:124:16: undefined: Message
+internal/chat/hub_test.go:13:20: undefined: Options
+internal/chat/hub_test.go:18:31: undefined: Options
+internal/chat/hub_test.go:18:41: undefined: Hub
+internal/chat/hub_test.go:26:52: undefined: Client
+internal/chat/hub_test.go:49:30: undefined: Hub
+internal/chat/hub_test.go:49:38: undefined: Client
+internal/chat/hub_test.go:49:48: undefined: Message
+internal/chat/hub_test.go:70:22: undefined: Message
+internal/handler/web/fakes_test.go:241:65: h.Chat undefined (type *Handler has no field or method Chat)
+ok  	homework/cmd/api	1.017s
+ok  	homework/cmd/bootstrap	3.697s
+ok  	homework/internal/auth	4.235s
+ok  	homework/internal/handler	10.259s
+ok  	homework/internal/middleware	1.019s
+ok  	homework/internal/model	1.012s
+ok  	homework/internal/repository	1.776s
+ok  	homework/web	1.012s
+[exit 2]

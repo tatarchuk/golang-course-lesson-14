@@ -1,0 +1,17 @@
+{{define "title"}}Chat - Albums{{end}}
+
+{{define "content"}}
+<section class="chat" id="chat" data-room="{{.Room}}">
+  <nav class="rooms" aria-label="Chat rooms">
+    {{range .Rooms}}<a href="/chat?room={{.}}"{{if eq . $.Room}} aria-current="page"{{end}}>#{{.}}</a>
+    {{end}}
+  </nav>
+  <p class="chat-status" id="chat-status" role="status">Connecting...</p>
+  <ul class="chat-log" id="chat-log" aria-live="polite"></ul>
+  <form class="chat-form" id="chat-form" autocomplete="off">
+    <input id="chat-text" name="text" maxlength="1000" placeholder="Message #{{.Room}}" required>
+    <button type="submit">Send</button>
+  </form>
+</section>
+<script src="/static/chat.js" defer></script>
+{{end}}

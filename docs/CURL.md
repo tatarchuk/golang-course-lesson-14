@@ -325,3 +325,43 @@ A member's cookie gets `403 forbidden` on the delete route and sees no Delete bu
 wrong password or an unknown e-mail on `POST /login` gets the same `401` page with "invalid credentials"
 and no cookie. Behind TLS set `COOKIE_SECURE=true`, so the cookie also carries `Secure`. The search is a
 case-insensitive match on the album title or an artist name; `%`, `_` and `\` are searched literally.
+
+## 9. Live chat (Lesson 14)
+
+The chat is the page `$WEB/chat` (sign in first). Its WebSocket, `GET /ws/chat?room=general|staff`, takes
+the same session cookie, so the browser never puts a token into a URL; `general` is for every role,
+`staff` for staff and admin. Three demo accounts, one per role, for three browsers (or a normal window, a
+private window and another browser: one browser profile shares one cookie):
+
+```bash
+API=localhost:8080/api/v1
+TOKEN=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"admin@albums.local","password":"Albums-Dev-2026"}' | jq -r .token)
+
+# two members (registration always gives member), then the admin promotes staff1
+for who in staff1 member1; do
+  curl -s -X POST $API/auth/register -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$who@albums.local\",\"password\":\"Albums-Dev-2026\"}"; echo
+done
+STAFF1=$(curl -s $API/users -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.email=="staff1@albums.local") | .id')
+curl -s -X PUT $API/users/$STAFF1/role -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"role":"staff"}'
+
+# the chat statistics are an admin route: 200 for the admin, 403 for member and staff, 401 without a token
+curl -s $API/chat/stats -H "Authorization: Bearer $TOKEN"     # {"clients":0,"rooms":{"general":0,"staff":0},"goroutines":9}
+
+# a REST write reaches the chat: everybody in #general sees the notice at once
+curl -s -X POST $API/albums -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"Blue Train","label":"Blue Note","genre_id":1,"artist_ids":[1]}'
+# in the chat: Album "Blue Train" (Blue Note, jazz) was added to the catalogue
+
+# connect/disconnect cycles from the terminal, server goroutines before and after (admin from .env)
+make chatload ARGS="-clients 50 -cycles 10"
+# a member may not join the staff room: the handshake is refused before any upgrade
+go run ./cmd/chatload -email member1@albums.local -password Albums-Dev-2026 -room staff -clients 1 -cycles 1
+# handshake refused: 403 Forbidden {"error":{"code":"forbidden","message":"the staff room is for staff and admin"}}
+```
+
+A client sends `{"text":"..."}` and nothing else counts: the author is the session's account and the room
+is the connection's. The server sends `message`, `notice`, `presence` (joins and leaves with the number
+online), `history` (the room's last 50 messages, first thing after joining) and `error` (to the sender
+only: an empty text, more than 1000 characters, not JSON); a frame over 4096 bytes closes with 1009.

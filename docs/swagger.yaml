@@ -1,5 +1,16 @@
 basePath: /api/v1
 definitions:
+  chat.Stats:
+    properties:
+      clients:
+        type: integer
+      goroutines:
+        type: integer
+      rooms:
+        additionalProperties:
+          type: integer
+        type: object
+    type: object
   handler.ErrorDetail:
     properties:
       code:
@@ -623,6 +634,30 @@ paths:
       summary: Register an account (role member)
       tags:
       - auth
+  /chat/stats:
+    get:
+      description: Clients per chat room and the goroutine count of the server (Lesson
+        14). Admin only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/chat.Stats'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Chat statistics
+      tags:
+      - chat
   /genres:
     get:
       produces:

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"homework/internal/app"
+	"homework/internal/chat"
 	"homework/internal/repository"
 	"homework/migrations"
 	"homework/web"
@@ -64,7 +65,10 @@ func run() error {
 
 	// The web UI's templates, static files and the migrations travel inside the binary:
 	// nothing is read from disk, so the server runs from any directory (Lesson 10).
-	cfg := app.Config{JWTSecret: secret, Templates: web.Templates(), Static: web.Static(), CookieSecure: cookieSecure}
+	// The live chat (Lesson 14): one hub for the process, stopped on shutdown below.
+	hub := chat.NewHub(chat.DefaultOptions())
+	go hub.Run()
+	cfg := app.Config{JWTSecret: secret, Templates: web.Templates(), Static: web.Static(), CookieSecure: cookieSecure, Chat: hub}
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           app.NewRouter(repository.NewGorm(db), cfg),
@@ -73,6 +77,9 @@ func run() error {
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	// Shutdown does not touch hijacked connections: the hub closes the chat's WebSockets
+	// with 1001 itself, and the pages reconnect to the next server.
+	srv.RegisterOnShutdown(hub.Shutdown)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

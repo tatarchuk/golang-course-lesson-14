@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"homework/internal/app"
+	"homework/internal/chat"
 	"homework/internal/model"
 	"homework/internal/repository"
 	"homework/internal/testdb"
@@ -20,12 +21,16 @@ import (
 
 // newRouter resets the database and builds the full HTTP handler on top of it. The
 // secret is set through the environment, as the Lesson 9 tests do, and read back the
-// way main does; the web UI gets the same embedded files main passes (Lesson 10).
+// way main does; the web UI gets the same embedded files main passes (Lesson 10), and
+// the chat a running hub that stops with the test (Lesson 14).
 func newRouter(t *testing.T) http.Handler {
 	t.Helper()
 	t.Setenv("JWT_SECRET", testJWTSecret)
 	testdb.Reset(t)
-	cfg := app.Config{JWTSecret: os.Getenv("JWT_SECRET"), Templates: web.Templates(), Static: web.Static()}
+	hub := chat.NewHub(chat.DefaultOptions())
+	go hub.Run()
+	t.Cleanup(hub.Shutdown)
+	cfg := app.Config{JWTSecret: os.Getenv("JWT_SECRET"), Templates: web.Templates(), Static: web.Static(), Chat: hub}
 	return app.NewRouter(repository.NewGorm(testdb.DB(t)), cfg)
 }
 

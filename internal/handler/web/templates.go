@@ -12,6 +12,7 @@ import (
 const (
 	pageCatalog = "catalog.html"
 	pageLogin   = "login.html"
+	pageChat    = "chat.html" // Lesson 14
 )
 
 // views holds the parsed template sets. The base set (layout and partials) renders the
@@ -31,7 +32,7 @@ func parseViews(fsys fs.FS) (*views, error) {
 		return nil, fmt.Errorf("web templates: %w", err)
 	}
 	v := &views{base: base, pages: map[string]*template.Template{}}
-	for _, name := range []string{pageCatalog, pageLogin} {
+	for _, name := range []string{pageCatalog, pageLogin, pageChat} {
 		clone, err := base.Clone()
 		if err != nil {
 			return nil, fmt.Errorf("web templates: clone for %s: %w", name, err)

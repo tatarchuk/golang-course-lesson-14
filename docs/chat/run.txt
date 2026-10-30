@@ -1,0 +1,53 @@
+Step 2.5: the live chat in the VM (docs/chat/environment.txt), driven from the Mac through the forwarded port
+8080. Fresh database volume: docker compose down -v && make up && make bootstrap. Recorded 2026-10-30.
+Tokens never appear below: the shell variables hold them.
+
+1. Demo accounts for three browsers (docs/CURL.md, section 9): staff1 and member1 register as members, the
+   admin promotes staff1.
+
+$ API=http://localhost:8080/api/v1
+[exit 0]
+
+$ TOKEN=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"admin@albums.local","password":"Albums-Dev-2026"}' | jq -r .token)
+[exit 0]
+
+$ for who in staff1 member1; do curl -s -X POST $API/auth/register -H 'Content-Type: application/json' -d "{\"email\":\"$who@albums.local\",\"password\":\"Albums-Dev-2026\"}"; echo; done
+{"id":5,"email":"staff1@albums.local","role":"member","created_at":"2026-10-30T11:35:39.158127157Z","updated_at":"2026-10-30T11:35:39.158127157Z"}
+
+{"id":6,"email":"member1@albums.local","role":"member","created_at":"2026-10-30T11:35:39.228430874Z","updated_at":"2026-10-30T11:35:39.228430874Z"}
+
+[exit 0]
+
+$ STAFF1=$(curl -s $API/users -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.email=="staff1@albums.local") | .id')
+[exit 0]
+
+$ curl -s -X PUT $API/users/$STAFF1/role -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"role":"staff"}'; echo
+{"id":5,"email":"staff1@albums.local","role":"staff","created_at":"2026-10-30T11:35:39.158127Z","updated_at":"2026-10-30T11:35:39.248366Z"}
+
+[exit 0]
+
+$ MEMBER=$(curl -s -X POST $API/auth/login -H 'Content-Type: application/json' -d '{"email":"member1@albums.local","password":"Albums-Dev-2026"}' | jq -r .token)
+[exit 0]
+
+$ curl -s $API/chat/stats -H "Authorization: Bearer $TOKEN"; echo
+{"clients":0,"rooms":{"general":0,"staff":0},"goroutines":9}
+
+[exit 0]
+
+$ curl -s $API/chat/stats -H "Authorization: Bearer $MEMBER"; echo
+{"error":{"code":"forbidden","message":"this action requires role admin"}}
+
+[exit 0]
+
+$ curl -s $API/chat/stats; echo
+{"error":{"code":"unauthenticated","message":"a bearer token is required"}}
+
+[exit 0]
+
+$ go run ./cmd/chatload -email member1@albums.local -password Albums-Dev-2026 -room staff -clients 1 -cycles 1
+13:35:40.228921 no server statistics (GET /api/v1/chat/stats: 403 Forbidden): the cycles run without the goroutine check
+13:35:40.229097 1 cycles of 1 clients as member1@albums.local in #staff, leaving with a close frame (1000)
+13:35:40.229841 cycle 1 client 1: handshake refused: 403 Forbidden {"error":{"code":"forbidden","message":"the staff room is for staff and admin"}}
+exit status 1
+[exit 1]
+

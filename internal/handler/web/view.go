@@ -20,6 +20,8 @@ type pageData struct {
 	Query     string     // the current search text, echoed into the input
 	Albums    []albumRow // the catalogue rows
 	Error     string     // the login page's message after a failed attempt
+	Rooms     []string   // the chat rooms the visitor may join (Lesson 14)
+	Room      string     // the chat room the page opens
 }
 
 // userView is what the layout shows about the signed-in account.

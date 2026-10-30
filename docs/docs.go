@@ -657,6 +657,43 @@ const docTemplate = `{
                 }
             }
         },
+        "/chat/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Clients per chat room and the goroutine count of the server (Lesson 14). Admin only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chat"
+                ],
+                "summary": "Chat statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/chat.Stats"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/genres": {
             "get": {
                 "produces": [
@@ -925,6 +962,23 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "chat.Stats": {
+            "type": "object",
+            "properties": {
+                "clients": {
+                    "type": "integer"
+                },
+                "goroutines": {
+                    "type": "integer"
+                },
+                "rooms": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "handler.ErrorDetail": {
             "type": "object",
             "properties": {
