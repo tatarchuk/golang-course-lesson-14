@@ -51,3 +51,45 @@ $ go run ./cmd/chatload -email member1@albums.local -password Albums-Dev-2026 -r
 exit status 1
 [exit 1]
 
+
+2. One basic case in a real browser, recorded 14:04. The api container was restarted first, so the room's
+   in-memory history (the last 50 messages) held none of the earlier load-test messages. Chrome 156
+   (headless) ran two browser contexts, that is two cookie jars, driven over the DevTools protocol by a
+   throwaway script outside the repository (<scratch>/chatproof): each context signs in with the /login
+   form, opens /chat and types one message into the page's form. The server, the page and chat.js are the
+   real ones; under the CSP default-src 'self' the page's same-origin ws:// connection opens in Chrome
+   (Safari was not run). Screenshot C2: docs/screenshots/chat/c02-chat.png (admin left, member1 right).
+
+$ vagrant ssh -c 'cd /app && docker compose restart api'     # on the Mac
+ Container app-api-1 Restarting
+ Container app-api-1 Started
+[exit 0]
+
+$ (cd <scratch>/chatproof && go run . -out <repo>/docs/screenshots/chat/c02-chat.png)
+Chrome/156.0.8078.74, two browser contexts (two cookie jars), http://localhost:8080
+
+admin:   POST /login as admin@albums.local (admin) -> /catalog; GET /chat -> "Connected to #general, 1 online"
+member1: POST /login as member1@albums.local (member) -> /catalog; GET /chat -> "Connected to #general, 2 online"
+server:  GET /api/v1/chat/stats (admin) -> {"clients":2,"rooms":{"general":2,"staff":0},"goroutines":17}
+
+admin sends "Hello from admin"
+member1 sends "Hi admin, member1 here"
+
+admin's page: "Connected to #general, 2 online"
+  presence 14:04:33  admin@albums.local joined
+  presence 14:04:33  member1@albums.local joined
+  message  14:04:34  admin@albums.local: Hello from admin
+  message  14:04:34  member1@albums.local: Hi admin, member1 here
+
+member1's page: "Connected to #general, 2 online"
+  presence 14:04:33  member1@albums.local joined
+  message  14:04:34  admin@albums.local: Hello from admin
+  message  14:04:34  member1@albums.local: Hi admin, member1 here
+
+OK: both pages show both messages exactly once, author from the session
+screenshot: c02-chat.png (2904x1200, admin left, member1 right)
+[exit 0]
+
+$ curl -s $API/chat/stats -H "Authorization: Bearer $TOKEN"; echo     # after the browser closed
+{"clients":0,"rooms":{"general":0,"staff":0},"goroutines":9}
+[exit 0]
