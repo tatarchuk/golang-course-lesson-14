@@ -73,12 +73,12 @@ Docker 29.9.2, Compose v5.6.1, Go 1.27.3 і gcc для `go test -race`. Mac: mac
 |---|---|
 | Сторінка | `GET /chat`; анонімного відвідувача переадресовує на `/login`; посилання лише на кімнати, дозволені ролі; невідома чи заборонена `?room=` дає `general` |
 | З'єднання | `GET /ws/chat?room=general\|staff` за `CookieAuth` і `RequireRole(member, staff, admin)`: cookie `albums_token` іде з рукостисканням, тож токен в URL не потрапляє |
-| До upgrade | кімната (`staff` лише для staff і admin, інакше 403; невідома — 404), акаунт за `user_id` із claims (видалений — 401), Origin дорівнює `Host` (інакше 403), зупинений хаб — 503 |
+| До upgrade | кімната (`staff` лише для staff і admin, інакше 403; невідома — 404), акаунт за `user_id` із claims (видалений — 401), Origin дорівнює `Host` (інший або відсутній — 403), зупинений хаб — 503 |
 | Повідомлення | клієнт надсилає лише `{"text":"..."}`: автор — e-mail акаунта, кімната — з'єднання; 1–1000 символів після обрізання пробілів, інакше кадр `error` лише відправникові; понад 4096 байт — закриття 1009 |
 | Кадри сервера | `message`, `notice`, `presence` (хто прийшов чи пішов і скільки онлайн), `history` (останні 50 повідомлень кімнати при вході, лише в пам'яті), `error` |
 | REST → чат | `chat.NotifyAlbums` обгортає репозиторій альбомів: створення (API) і видалення (API чи вебінтерфейс) публікують `notice` у `general`, напр. `Album "Blue Train" (Blue Note, jazz) was added to the catalogue`; невдалий запис нічого не публікує |
 | Статистика | `GET /api/v1/chat/stats`, лише admin: клієнти за кімнатами і кількість горутин сервера |
-| Життєвий цикл | ping кожні 54 с, pong-тайм-аут 60 с, дедлайн запису 10 с; черга відправки 256 кадрів, клієнта з повною чергою хаб відключає кодом 1008; `Shutdown` через `srv.RegisterOnShutdown` закриває всіх кодом 1001 |
+| Життєвий цикл | ping кожні 54 с, pong-тайм-аут 60 с, дедлайн запису 10 с; черга відправки 256 кадрів, клієнта з повною чергою хаб відключає кодом 1008; `Shutdown` через `srv.RegisterOnShutdown` закриває всіх кодом 1001, і процес завершується лише після того, як кожен писач надіслав кадр закриття (не довше 10 с) |
 
 Хаб — виправлений патерн із прикладів (огляд ШІ за слайдом 42 і тести в репозиторії прикладів): реєстром володіє одна
 горутина, у кожного з'єднання один писач, розсилка не блокується повільним клієнтом, зупинка ідемпотентна.
@@ -118,22 +118,24 @@ Docker 29.9.2, Compose v5.6.1, Go 1.27.3 і gcc для `go test -race`. Mac: mac
    повідомлень, горутини сервера 9 → 9 ([smoke.txt](docs/chat/smoke.txt)). Ті самі цикли запускає CI.
 8. **CI.** Статичні перевірки Теми 14 і цикли чату в інтеграційному завданні (нижче). Прогін статичного кроку локально
    (у VM) знайшов кирилицю в одному тесті: перевірка «у .go лише ASCII» впала і на GitHub. Літеру записано як
-   `ж`, значення тесту те саме.
+   `\u0436`, значення тесту те саме.
 
 Сповіщення про альбоми і закриття з'єднань під час зупинки сервера перевірено тестами (`TestAlbumCreateNotifiesChat`,
-`TestNotifyOn*`, `TestShutdownClosesClientsWithGoingAway`); окремих скриншотів для них немає. Перепідключення сторінки
-після рестарту сервера вручну не перевірялося, Safari не запускався.
+`TestNotifyOn*`, `TestShutdownClosesClientsWithGoingAway`); окремих скриншотів для них немає. Рестарт сервера з
+відкритими сторінками перевірено після фінального огляду (I1 нижче): `docker compose restart api`, обидві сторінки
+отримали `1001 server shutdown` і за 3,1 с підключилися знову ([run.txt](docs/chat/run.txt), розділ 3). Safari не
+запускався.
 
 ### Тести
 
 | Файл | Тести | Що доводять |
 |---|---|---|
-| `internal/chat/hub_test.go` | `TestRoomsAreIsolated`, `TestHistoryReplayedOnJoin`, `TestPresenceCountsOnline`, `TestStuckClientDropped`, `TestShutdownIsIdempotentAndUnblocks`, `TestOptionsValidate`, `TestRoomsFor` | кімнати ізольовані; при вході 50 останніх, найстаріше відкинуто; лічильник онлайн; клієнт, що не читає (черга 2), відключається з 1008, здоровий отримує всі 10; повторний `Shutdown` без паніки і без блокування |
-| `internal/chat/handler_test.go` | `TestThreeClientsEchoOnce`, `TestAuthorComesFromAccount`, `TestRoomAccess`, `TestForeignOriginRejected`, `TestTextValidation`, `TestAbruptDisconnectUnregisters`, `TestDeadPeerTimesOut` | три клієнти, у відправника без дубліката; `author`, `room`, `type` від клієнта нічого не змінюють; 403, 404, 401; чужий Origin; порожній текст, 1001 символ, 5000 байт → 1009; обірване з'єднання; «мертвий» клієнт за тайм-аутом pong |
+| `internal/chat/hub_test.go` | `TestRoomsAreIsolated`, `TestHistoryReplayedOnJoin`, `TestPresenceCountsOnline`, `TestStuckClientDropped`, `TestShutdownIsIdempotentAndUnblocks`, `TestShutdownWaitsForWriters`, `TestOptionsValidate`, `TestRoomsFor` | кімнати ізольовані; при вході 50 останніх, найстаріше відкинуто; лічильник онлайн; клієнт, що не читає (черга 2), відключається з 1008, здоровий отримує всі 10; повторний `Shutdown` без паніки і без блокування; `Shutdown` повертається лише після кадрів закриття всіх писачів, не пізніше `WriteWait` (фінальний огляд, I1) |
+| `internal/chat/handler_test.go` | `TestThreeClientsEchoOnce`, `TestAuthorComesFromAccount`, `TestRoomAccess`, `TestForeignOriginRejected`, `TestTextValidation`, `TestAbruptDisconnectUnregisters`, `TestDeadPeerTimesOut` | три клієнти, у відправника без дубліката; `author`, `room`, `type` від клієнта нічого не змінюють; 403, 404, 401; чужий або відсутній Origin; порожній текст, 1001 символ, 5000 байт → 1009; обірване з'єднання; «мертвий» клієнт за тайм-аутом pong |
 | `internal/chat/leak_test.go` | `TestConnectDisconnectCyclesNoLeak`, `TestShutdownClosesClientsWithGoingAway` | 100 клієнтів за 5 циклів (з кадром закриття і без): 0 клієнтів, горутин не більше базових + 2; зупинка — 1001 кожному |
 | `internal/chat/albums_test.go` | `TestNotifyOnCreate`, `TestNotifyOnDelete`, `TestNoNoticeOnError` | сповіщення з REST; невдалий запис нічого не публікує |
-| `internal/handler/web/chat_test.go` | `TestChatPageRedirectsAnonymous`, `TestChatPageRoomsByRole`, `TestChatPageScriptOnly` | анонім → `/login`; кімнати за роллю; лише зовнішній `chat.js`, CSP на місці |
-| `internal/app/chat_test.go`, `config_test.go` | `TestChatRoutesWired`, `TestAlbumCreateNotifiesChat`, `TestNewRouterPanicsWithoutChatHub` | маршрути з реальною базою: `/ws/chat` 401, 403, 101; статистика 401, 403, 200; `POST /albums` дає сповіщення за 1 с |
+| `internal/handler/web/chat_test.go` | `TestChatPageRedirectsAnonymous`, `TestChatPageRoomsByRole`, `TestChatPageScriptOnly` | анонім → `/login`; кімнати за роллю; лише зовнішній `chat.js` |
+| `internal/app/chat_test.go`, `config_test.go` | `TestChatRoutesWired`, `TestAlbumCreateNotifiesChat`, `TestNewRouterPanicsWithoutChatHub` | маршрути з реальною базою: `/ws/chat` 401, 403, 101; статистика 401, 403, 200; `POST /albums` дає сповіщення за 1 с; на `/chat` діє CSP |
 | `internal/middleware/middleware_test.go` | `TestLoggingPassesHijackerThrough` | upgrade крізь `Logging` → 101 |
 
 CI (`theme8-check.yml`): статичні перевірки Теми 14 — файли чату, gorilla/websocket v1.5.3 у `go.mod`, `h.rooms` лише в
@@ -179,6 +181,28 @@ CI (`theme8-check.yml`): статичні перевірки Теми 14 — ф�
 C1 — термінал. C2 — Chrome 156 без вікна (headless) з двома окремими контекстами, яким керував скрипт через DevTools
 protocol; сервер, сторінка і `chat.js` справжні.
 
+### Фінальний огляд
+
+Незалежний огляд усієї гілки: свіжий субагент Claude Fable 5.1 лише з правом читання, промпт — у
+[prompts.txt](prompts.txt), відповідь дослівно — [docs/review-raw.md](docs/review-raw.md). Огляд звірив кожне число
+звіту з журналами (розбіжностей три, вони нижче) і пройшов питання слайдів 42 і 45 по хабу: 0 критичних, 2 важливі,
+7 дрібних знахідок. Виправлення — тестом спершу ([review-fixes.txt](docs/chat/review-fixes.txt)).
+
+| # | Знахідка | Рішення | Доказ |
+|---|---|---|---|
+| I1 | `srv.Shutdown` запускає хук `RegisterOnShutdown` в окремій горутині й не чекає на нього, тож процес міг завершитися раніше, ніж клієнти чату отримають 1001 | виправлено: `Shutdown` хаба чекає, поки кожен писач надішле кадр закриття (не довше `WriteWait`), а `main` викликає його ще раз після `srv.Shutdown` | `TestShutdownWaitsForWriters` (червоний → зелений); рестарт контейнера — обидві сторінки отримали 1001 ([run.txt](docs/chat/run.txt), розділ 3) |
+| I2 | рукостискання без заголовка Origin проходило, хоча контракт — «Origin дорівнює Host, інакше 403» | виправлено: без Origin — 403 (браузери й `cmd/chatload` його надсилають) | випадок «no Origin header» у `TestForeignOriginRejected` (червоний → зелений) |
+| M1 | крок 8 звіту показував саму літеру замість екранування `\u0436` | виправлено | — |
+| M2 | таблиця тестів приписувала перевірку CSP тесту `TestChatPageScriptOnly` | виправлено: CSP на `/chat` перевіряє `TestChatRoutesWired` | — |
+| M3 | клієнт, якого хаб відключив з 1008, може ще надіслати повідомлення, поки його сокет не закрито | відкладено: для цього потрібна переповнена черга з 256 кадрів | — |
+| M4 | `chatload` пише «back to the baseline» і тоді, коли горутин +1 чи +2 | відкладено: у межах допуску (+2) | — |
+| M5 | e-mail користувачів у журналі сервера при вході й виході | відкладено: журнал лише локальний, e-mail і так є автором у кадрах | — |
+| M6 | `chat.js` безкінечно перепідключається після відмови в рукостисканні (вихід в іншій вкладці, прострочений токен) | відкладено | — |
+| M7 | `Options.Validate` приймає `SendBuffer = 1`, з яким клієнта відключає вже його власний вхід | відкладено: стандартне значення — 256 | — |
+
+M1 і M2 огляд позначив дрібними; їх виправлено, бо це неправдиві твердження у звіті. Рестарт сервера з відкритими
+сторінками, який випав разом із прогоном у трьох браузерах, після I1 перевірено автоматично.
+
 ### Докази
 
 | Файл | Що в ньому |
@@ -189,6 +213,8 @@ protocol; сервер, сторінка і `chat.js` справжні.
 | [docs/chat/hijack-fix.txt](docs/chat/hijack-fix.txt) | `Hijack`: червоний прогін (500) і зелений (101) |
 | [docs/chat/tests-before.txt](docs/chat/tests-before.txt) | тести чату до коду: пакети не збираються |
 | [docs/chat/tests-after.txt](docs/chat/tests-after.txt) | 324 тести з `-race`, серед них 26 Теми 14 |
-| [docs/chat/run.txt](docs/chat/run.txt) | демо-акаунти, статистика 200/403/401, member → `staff` 403; базовий сценарій у браузері |
+| [docs/chat/run.txt](docs/chat/run.txt) | демо-акаунти, статистика 200/403/401, member → `staff` 403; базовий сценарій у браузері; рестарт: 1001 і перепідключення |
 | [docs/chat/smoke.txt](docs/chat/smoke.txt) | `scripts/smoke.sh`: 107/107, цикли чату 2×100 |
+| [docs/chat/review-fixes.txt](docs/chat/review-fixes.txt) | виправлення фінального огляду: червоні й зелені прогони, увесь модуль у VM (154 тести верхнього рівня, 0 FAIL) |
+| [docs/review-raw.md](docs/review-raw.md), [prompts.txt](prompts.txt) | дослівна відповідь фінального огляду і промпт до нього |
 | [docs/CURL.md](docs/CURL.md), розділ 9 | демо-акаунти і запити до чату |

@@ -1,0 +1,78 @@
+Lesson 14 prompt log of the albums app. The chat follows the hub reviewed in the examples repository, whose
+prompts.txt holds the two deck prompts (slides 34 and 42); the only prompt of this repository is the final review.
+
+=== Final review of the branch (step 3.1), sent verbatim to a fresh read-only subagent (Claude Fable 5.1) ===
+
+You are a Senior Code Reviewer with expertise in Go, concurrency and web security. Your job is the final whole-branch review of Lesson 14 (live chat over WebSockets) in the Go repository /Users/oleksandr.tatarchuk/repo/golang-course-lesson-14 (module `homework`, the `albums` app of the course "Go with GenAI"). README and homework file are in Ukrainian; read them, write your review in English.
+
+## What was implemented
+
+The repository is a clone of the Lesson 12 app (history kept, the author e-mail rewritten). The Lesson 14 commits are 82d08e8..8927043 (8 commits): the start commit (README template, Lesson 12 homework and prompts removed), the homework task file, a fix that gives middleware.Logging's statusWriter Hijack and Unwrap (gorilla/websocket upgrades through w.(http.Hijacker)), a Go provisioner for the Vagrant VM, the live chat (internal/chat: hub.go, client.go, handler.go, albums.go, message.go; the /chat page with web/static/chat.js; cmd/chatload; wiring in internal/app/app.go and cmd/api/main.go), run evidence and two screenshots, an ASCII fix in a test, and the README report plus new CI checks.
+
+## Requirements / plan
+
+- Plan: /Users/oleksandr.tatarchuk/.claude/plans/lesson-14-websockets-chat.md. For this repository Part 0 (steps 0.3, 0.4) and Part 2 (steps 2.1-2.6) apply, plus its "Context", "Decisions", "Global constraints" and the Part 2 "Contract". The plan's Context/Decisions and albums_lesson14_homework.md are the spec.
+- Rulings made during execution: the lines containing "Ruling:" in /Users/oleksandr.tatarchuk/repo/golang-course-lesson-14/.superpowers/sdd/lesson-14-websockets-chat/progress.md. Weigh them; say which you would overturn and why. Note: the user refused the planned three-browser manual run, so the browser proof was cut to one basic case (C2) made with headless Chrome; Safari and the manual restart/reconnect were not run.
+- Review focus from the plan (verbatim):
+  1. A wrapped ResponseWriter without `Hijack` turns every upgrade into a 500: `TestLoggingPassesHijackerThrough` (2.2).
+  2. A readPump that unregisters after the hub stopped blocks forever (goroutine leak on shutdown): `TestStopUnblocksLateUnregister` (examples), `TestShutdownIsIdempotentAndUnblocks` (app).
+  3. One browser profile = one cookie, so three tabs are one user: C2 uses three cookie jars (Chrome, Chrome incognito, Safari); the examples keep the token per tab in `sessionStorage`.
+  4. CSP `default-src 'self'` must let the page open a same-origin `ws://` in Chrome and Safari: console checked in 2.5; fallback = an explicit `connect-src` on the chat page, pinned by `TestChatPageScriptOnly`.
+  5. `http.Server.Shutdown` does not close hijacked connections: `srv.RegisterOnShutdown(hub.Shutdown)`, tests `TestShutdownClosesClients*`, and the manual `docker compose restart api` in 2.5 (the page reconnects).
+
+## Git range to review
+
+Base 82d08e8, head 8927043. A review package with the commit list, the stat and the net diff (10 lines of context) is at /private/tmp/claude-501/-Users-oleksandr-tatarchuk-repo-golang-course-lesson-14/85df7214-7be3-4ecf-891f-d8ca70ad71f9/scratchpad/review-app.diff (about 320 KB): read it in passes, and open full files where the diff is not enough.
+
+## Evidence already produced
+
+The app needs PostgreSQL and runs in a Vagrant VM; do not start or use the VM. Instead read:
+- /private/tmp/claude-501/-Users-oleksandr-tatarchuk-repo-golang-course-lesson-14/85df7214-7be3-4ecf-891f-d8ca70ad71f9/scratchpad/app-tests-head.txt: `go vet ./...` and `go test ./... -race -count=1 -v` in the VM at 8927043 (all ok).
+- /private/tmp/claude-501/-Users-oleksandr-tatarchuk-repo-golang-course-lesson-14/85df7214-7be3-4ecf-891f-d8ca70ad71f9/scratchpad/static-replay2.out: the CI static step replayed in the VM (53 PASS, 0 FAIL).
+- GitHub Actions run 41054119445 for 8927043 (`gh run view 41054119445`, `gh run view 41054119445 --log`); static was green, integration was still running when you started.
+- docs/chat/*.txt and docs/screenshots/chat/c01-tests.png, c02-chat.png (you can view PNGs).
+
+## What to check, beyond the usual plan alignment and code quality
+
+1. Every number and factual claim in README.md (the run instructions, the structure and the "Lesson 14 Report: Live Chat" section) and in the Lesson 14 parts of albums_lesson14_homework.md and docs/CURL.md section 9, against the evidence files and the code: test counts, PASS counts, stats values, goroutine numbers, close codes, queue sizes, timeouts, route statuses, file and test names. List each number you checked with its source; every mismatch is a finding.
+2. Concurrency of internal/chat (hub.go, client.go, handler.go): walk the questions of the slide 42 prompt (section "Slide 42" of /Users/oleksandr.tatarchuk/repo/golang-course-lesson-14-examples/prompts.txt) and of slide 45 (albums_lesson14_homework.md, section "Чеклісти з презентації") over this hub: data races, goroutine leaks, deadlocks on shutdown, double close, blocking sends, more than one writer per connection, Publish/Register/Unregister after Shutdown, the history and presence logic, the 1008 drop path.
+3. Security: the handshake behind CookieAuth and RequireRole, the Origin check, room access, the author taken from the account (deleted account), input limits, chat.js rendering (no HTML injection), the CSP and the chat page, the stats route, the album notices (can a notice leak something to a role that should not see it?).
+4. The CI changes in .github/workflows/theme8-check.yml and scripts/smoke.sh: does each new check catch what its name claims (no vacuous pass, e.g. a grep over the wrong path), and can any fail spuriously on GitHub's Ubuntu runner?
+5. You may run read-only commands on the Mac (Go 1.27.1): git log/show/diff, grep, `go vet ./...`, `go build -o /tmp/... ./...`, and the database-free tests `go test -race -count=1 ./internal/chat/ ./internal/middleware/ ./internal/handler/web/`. Do not run `go mod tidy`, `gofmt -w` or anything else that writes to the working tree or the index.
+
+## The spec is a vision document
+
+The spec says what the software must do. It does not enumerate every input, environment, or condition the software will meet. For behavior the spec is silent on, judge by what a reasonable person using this software would expect: a reasonable person's expectation is a requirement, and a spec's silence is not permission. Grade such findings by their effect on that person, not by whether the spec mentions the trigger.
+
+## Declined to judge
+
+Before your verdict, list every behavior you considered and set aside as outside the plan or spec, one line each, with the reason. The executor rules on each line; nothing you set aside is dropped silently. An empty list means you set nothing aside.
+
+## Read-only review
+
+Your review is read-only on this checkout. Do not mutate the working tree, the index, HEAD, or branch state in any way. Use tools like `git show`, `git diff`, and `git log` to inspect history. If you need a working copy of a different revision, check it out into a separate temporary directory (e.g. `git worktree add /tmp/review-<sha> <sha>`) and remove it afterwards — never move HEAD on this checkout.
+
+## You do not dispatch subagents
+
+Do all of this review yourself. Never spawn a subagent to review part of the diff, and never spawn another reviewer for a second opinion. If the diff feels too large for one pass, review it in passes yourself and say so in your report.
+
+## Calibration
+
+Categorize issues by actual severity. Not everything is Critical. Acknowledge what was done well before listing issues. If you find significant deviations from the plan, flag them specifically so the implementer can confirm whether the deviation was intentional. If you find issues with the plan itself rather than the implementation, say so.
+
+## Output format (your final message is saved verbatim as docs/review-raw.md, so make it self-contained Markdown)
+
+### Strengths
+### Issues
+#### Critical (Must Fix)
+#### Important (Should Fix)
+#### Minor (Nice to Have)
+For each issue: an ID (C1, I1, M1 ...), File:line, what is wrong, why it matters, how to fix (if not obvious), and how a test could prove the fix.
+### Numbers checked
+A table: claim | where it appears | source checked | match?
+### Rulings
+Your view of each "Ruling:" line of the ledger: stands / overturn, one line each.
+### Declined to judge
+### Recommendations
+### Assessment
+**Ready to merge?** Yes | No | With fixes. **Reasoning:** 1-2 sentences.

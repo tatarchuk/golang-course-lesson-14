@@ -93,3 +93,51 @@ screenshot: c02-chat.png (2904x1200, admin left, member1 right)
 $ curl -s $API/chat/stats -H "Authorization: Bearer $TOKEN"; echo     # after the browser closed
 {"clients":0,"rooms":{"general":0,"staff":0},"goroutines":9}
 [exit 0]
+
+3. Restart with the pages connected, after the final review (finding I1), recorded 14:45. The api image was rebuilt with
+   the fix (make up in the VM). The same throwaway script repeats the basic case, records every WebSocket close that
+   chat.js sees (a wrapper installed before the page's own scripts), restarts the api container (docker compose sends
+   SIGTERM) and waits until both pages are back. The first close of each page must be 1001 from the server, not 1006.
+
+$ (cd <scratch>/chatproof && go run . -out "" -restart <repo>)
+Chrome/156.0.8078.74, two browser contexts (two cookie jars), http://localhost:8080
+
+admin:   POST /login as admin@albums.local (admin) -> /catalog; GET /chat -> "Connected to #general, 1 online"
+member1: POST /login as member1@albums.local (member) -> /catalog; GET /chat -> "Connected to #general, 2 online"
+server:  GET /api/v1/chat/stats (admin) -> {"clients":2,"rooms":{"general":2,"staff":0},"goroutines":17}
+
+admin sends "Hello from admin"
+member1 sends "Hi admin, member1 here"
+
+admin's page: "Connected to #general, 2 online"
+  presence 14:45:45  admin@albums.local joined
+  presence 14:45:45  member1@albums.local joined
+  message  14:45:45  admin@albums.local: Hello from admin
+  message  14:45:45  member1@albums.local: Hi admin, member1 here
+
+member1's page: "Connected to #general, 2 online"
+  presence 14:45:45  member1@albums.local joined
+  message  14:45:45  admin@albums.local: Hello from admin
+  message  14:45:45  member1@albums.local: Hi admin, member1 here
+
+OK: both pages show both messages exactly once, author from the session
+
+$ vagrant ssh -c 'cd /app && docker compose restart api'
+ Container app-api-1 Restarting 
+ Container app-api-1 Started 
+both pages reconnected 3.1 s after the restart began
+admin:   closes seen by chat.js: ["1001 server shutdown"]; status now "Connected to #general, 2 online"
+member1: closes seen by chat.js: ["1001 server shutdown"]; status now "Connected to #general, 2 online"
+OK: the server closed both pages with 1001 before it exited, and both reconnected
+[exit 0]
+
+$ vagrant ssh -c 'cd /app && docker compose logs --no-log-prefix --since 1m api | grep -E "shutting down|chat: .*(server shutdown|joined)|listening on"'
+2026/10/30 12:45:45 chat: user=admin@albums.local room=general joined (1 in the room)
+2026/10/30 12:45:45 chat: user=member1@albums.local room=general joined (2 in the room)
+2026/10/30 12:45:48 shutting down
+2026/10/30 12:45:48 chat: user=admin@albums.local room=general left: server shutdown (1 in the room)
+2026/10/30 12:45:48 chat: user=member1@albums.local room=general left: server shutdown (0 in the room)
+2026/10/30 12:45:48 listening on :8080
+2026/10/30 12:45:49 chat: user=member1@albums.local room=general joined (1 in the room)
+2026/10/30 12:45:49 chat: user=admin@albums.local room=general joined (2 in the room)
+[exit 0]

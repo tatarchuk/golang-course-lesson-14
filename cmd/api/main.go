@@ -78,7 +78,8 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	// Shutdown does not touch hijacked connections: the hub closes the chat's WebSockets
-	// with 1001 itself, and the pages reconnect to the next server.
+	// with 1001 itself (started by this hook, waited for below), and the pages reconnect to
+	// the next server.
 	srv.RegisterOnShutdown(hub.Shutdown)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -100,7 +101,9 @@ func run() error {
 		log.Print("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		err := srv.Shutdown(shutdownCtx)
+		hub.Shutdown() // srv.Shutdown does not wait for its hook: every chat client gets its 1001 first
+		return err
 	}
 }
 

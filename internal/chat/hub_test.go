@@ -232,6 +232,39 @@ func TestShutdownIsIdempotentAndUnblocks(t *testing.T) {
 	}
 }
 
+// TestShutdownWaitsForWriters: http.Server.Shutdown starts the RegisterOnShutdown hook in
+// its own goroutine and main returns right after it, so Shutdown must not return before
+// every connection's writer has sent its close frame, and gives up after WriteWait.
+func TestShutdownWaitsForWriters(t *testing.T) {
+	o := testOptions()
+	o.WriteWait = 300 * time.Millisecond
+	h := NewHub(o)
+	go h.Run()
+	slow := newTestClient(RoomGeneral, "slow@albums.local", 4)
+	slow.closed = make(chan struct{}) // closed when its writer has sent the close frame
+	stuck := newTestClient(RoomGeneral, "stuck@albums.local", 4)
+	stuck.closed = make(chan struct{}) // its writer never finishes
+	h.registerClient(slow)
+	h.registerClient(stuck)
+
+	returned := make(chan struct{})
+	go func() {
+		h.Shutdown()
+		close(returned)
+	}()
+	select {
+	case <-returned:
+		t.Fatal("Shutdown returned before the writers sent their close frames")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(slow.closed)
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("Shutdown still waits for a stuck writer after WriteWait")
+	}
+}
+
 func TestOptionsValidate(t *testing.T) {
 	if err := DefaultOptions().Validate(); err != nil {
 		t.Fatalf("DefaultOptions: %v", err)

@@ -24,6 +24,7 @@ type Client struct {
 	user      string // the account's e-mail: the author of everything this client sends
 	closeCode int    // set by the hub before it closes send: the close frame writePump sends
 	closeText string
+	closed    chan struct{} // closed by writePump when it returns: its close frame is sent
 }
 
 func (c *Client) String() string { return fmt.Sprintf("user=%s room=%s", c.user, c.room) }
@@ -67,6 +68,7 @@ func (c *Client) writePump() {
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
+		close(c.closed)
 	}()
 	for {
 		select {

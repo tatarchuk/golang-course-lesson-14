@@ -1,0 +1,64 @@
+Fixes of the final review (step 3.1, docs/review-raw.md), test first, recorded 2026-10-30 on the Mac (the chat
+package needs no database) and in the VM (the whole module). The go test output is filtered to the test lines.
+
+I2: a handshake without an Origin header was upgraded, although the contract says Origin must equal Host.
+TestForeignOriginRejected gained the case "no Origin header".
+
+$ go test -race -count=1 -run '^TestForeignOriginRejected$' -v ./internal/chat/     # before the fix
+=== RUN   TestForeignOriginRejected
+    handler_test.go:91: no Origin header: upgraded, want 403
+--- FAIL: TestForeignOriginRejected (0.00s)
+FAIL
+FAIL	homework/internal/chat	0.366s
+FAIL
+[exit 1]
+
+$ go test -race -count=1 -v ./internal/chat/     # after: sameOrigin refuses a missing Origin
+--- PASS: TestForeignOriginRejected (0.00s)
+ok  	homework/internal/chat	3.058s
+[exit 0]
+
+I1: Shutdown returned once Run had closed the queues, before the writers had sent their close frames, and
+http.Server.Shutdown does not wait for its RegisterOnShutdown hook, so the process could exit first.
+TestShutdownWaitsForWriters is new; the run before the fix already has Client.closed (closed by writePump).
+
+$ go test -race -count=1 -run '^TestShutdownWaitsForWriters$' -v ./internal/chat/     # before the hub waits
+=== RUN   TestShutdownWaitsForWriters
+    hub_test.go:257: Shutdown returned before the writers sent their close frames
+--- FAIL: TestShutdownWaitsForWriters (0.00s)
+FAIL
+FAIL	homework/internal/chat	0.478s
+FAIL
+[exit 1]
+
+$ go test -race -count=1 -run '^TestShutdownWaitsForWriters$' -v ./internal/chat/     # after: Shutdown waits, main calls it after srv.Shutdown
+--- PASS: TestShutdownWaitsForWriters (0.30s)
+ok  	homework/internal/chat	1.671s
+[exit 0]
+
+$ go test -race -count=3 ./internal/chat/ ./internal/middleware/ ./internal/handler/web/
+ok  	homework/internal/chat	7.102s
+ok  	homework/internal/middleware	1.377s
+ok  	homework/internal/handler/web	13.696s
+[exit 0]
+
+The whole module in the VM after both fixes (vagrant ssh -c "cd /app && ..."):
+
+$ gofmt -l . && go vet ./... && go test ./... -race -count=1 -v
+ok  	homework/cmd/api	1.015s
+ok  	homework/cmd/bootstrap	3.904s
+ok  	homework/internal/app	24.997s
+ok  	homework/internal/auth	4.249s
+ok  	homework/internal/chat	2.947s
+ok  	homework/internal/handler	10.849s
+ok  	homework/internal/handler/web	4.991s
+ok  	homework/internal/middleware	1.031s
+ok  	homework/internal/model	1.011s
+ok  	homework/internal/repository	18.943s
+ok  	homework/web	1.014s
+[exit 0]
+Top-level PASS lines: 154 (153 before the review plus TestShutdownWaitsForWriters), all PASS lines with
+subtests: 325, FAIL: 0, SKIP: 0. The CI static step replayed in the VM: 53 PASS, 0 FAIL.
+
+The running server: docs/chat/run.txt, section 3 (docker compose restart api with two pages connected: both get
+1001 and reconnect).

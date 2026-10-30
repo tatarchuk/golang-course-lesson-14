@@ -41,6 +41,7 @@ type Hub struct {
 	quit       chan struct{} // closed by Shutdown
 	done       chan struct{} // closed when Run has returned
 	stopOnce   sync.Once
+	closing    []*Client // the connections Run closed at shutdown; read only after done
 }
 
 // NewHub returns a hub; start it with go h.Run(). It panics on invalid options.
@@ -87,6 +88,9 @@ func (h *Hub) Run() {
 			for _, members := range h.rooms {
 				for c := range members {
 					h.drop(c, websocket.CloseGoingAway, "server shutdown")
+					if c.closed != nil { // a connection: its writer sends the close frame
+						h.closing = append(h.closing, c)
+					}
 				}
 			}
 			return
@@ -201,12 +205,23 @@ func (h *Hub) Stats() Stats {
 	}
 }
 
-// Shutdown closes every client with 1001 (going away), ends Run and waits for it; a second
-// call returns at once. http.Server.Shutdown does not touch hijacked connections, so main
-// registers this with RegisterOnShutdown. Run must have been started.
+// Shutdown closes every client with 1001 (going away), ends Run and then waits until each
+// connection's writer has sent its close frame, at most WriteWait. http.Server.Shutdown
+// neither touches hijacked connections nor waits for its RegisterOnShutdown hooks, so main
+// registers this hook and calls Shutdown again once srv.Shutdown has returned, before the
+// process exits. Every call waits the same way; Run must have been started.
 func (h *Hub) Shutdown() {
 	h.stopOnce.Do(func() { close(h.quit) })
 	<-h.done
+	timeout := time.NewTimer(h.opts.WriteWait)
+	defer timeout.Stop()
+	for _, c := range h.closing {
+		select {
+		case <-c.closed:
+		case <-timeout.C:
+			return
+		}
+	}
 }
 
 func (h *Hub) stopped() bool {

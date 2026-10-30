@@ -80,7 +80,8 @@ func (s *wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("chat: upgrade refused: %v", err) // Upgrade has already answered (403 for a foreign Origin)
 		return
 	}
-	c := &Client{hub: s.hub, conn: conn, send: make(chan []byte, s.hub.opts.SendBuffer), room: room, user: account.Email}
+	c := &Client{hub: s.hub, conn: conn, send: make(chan []byte, s.hub.opts.SendBuffer), room: room, user: account.Email,
+		closed: make(chan struct{})}
 	if !s.hub.registerClient(c) { // the hub stopped after the check above
 		_ = conn.WriteControl(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutdown"), time.Now().Add(s.hub.opts.WriteWait))
@@ -93,15 +94,11 @@ func (s *wsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // sameOrigin is the chat's CheckOrigin (slide 13): only a page of this site may open the
 // chat, so another site cannot use the visitor's cookie for it (cross-site WebSocket
-// hijacking). A client without an Origin header is not a browser; it still needs the
-// session cookie.
+// hijacking). A handshake without an Origin header is refused too: browsers always send
+// one, and cmd/chatload sends the page's Origin like a browser does.
 func sameOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-	u, err := url.Parse(origin)
-	return err == nil && strings.EqualFold(u.Host, r.Host)
+	u, err := url.Parse(r.Header.Get("Origin"))
+	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 }
 
 // StatsHandler serves the chat's statistics: the clients per room and the goroutines of the

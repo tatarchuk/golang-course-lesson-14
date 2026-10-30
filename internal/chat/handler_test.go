@@ -77,16 +77,23 @@ func TestRoomAccess(t *testing.T) {
 }
 
 // TestForeignOriginRejected is slides 13 and 45: a page of another site cannot open the
-// chat with the visitor's cookie (cross-site WebSocket hijacking).
+// chat with the visitor's cookie (cross-site WebSocket hijacking), and a handshake without
+// an Origin header is refused as well (the contract: Origin must equal Host).
 func TestForeignOriginRejected(t *testing.T) {
 	e := newEnv(t)
-	c, resp, err := e.dial(1, "general", http.Header{"Origin": {"http://evil.example"}})
-	if err == nil {
-		c.Close()
-		t.Fatal("upgraded with a foreign Origin, want 403")
-	}
-	if resp == nil || resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("%v, want 403", err)
+	for name, origin := range map[string][]string{
+		"a foreign Origin": {"http://evil.example"},
+		"no Origin header": nil, // dial sends the server's own Origin unless told otherwise
+	} {
+		c, resp, err := e.dial(1, "general", http.Header{"Origin": origin})
+		if err == nil {
+			c.Close()
+			t.Errorf("%s: upgraded, want 403", name)
+			continue
+		}
+		if resp == nil || resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s: %v, want 403", name, err)
+		}
 	}
 }
 
