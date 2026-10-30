@@ -254,5 +254,21 @@ else
   fail "GET /catalog costs at most 5 SELECTs (no N+1 for the availability column)" "SELECTs=$QC"
 fi
 
+# Lesson 14: the live chat. Anonymous visitors get neither the page nor the socket; then
+# connect/disconnect cycles (cmd/chatload) must leave no client and no goroutine behind.
+[ "$(page "$BASE_URL/chat")" = "303" ] && grep -qi '^location: /login' "$HDR" \
+  && pass "Anonymous GET /chat -> 303 /login" || fail "Anonymous GET /chat -> 303 /login"
+[ "$(page "$BASE_URL/ws/chat?room=general")" = "401" ] \
+  && pass "Anonymous GET /ws/chat -> 401 before any upgrade" || fail "Anonymous GET /ws/chat -> 401 before any upgrade"
+http "Admin GET /chat/stats -> 200" 200 GET /chat/stats
+for mode in graceful abrupt; do
+  flag=""; [ "$mode" = abrupt ] && flag=-abrupt
+  if go run ./cmd/chatload -base "$BASE_URL" -email "$ADMIN_EMAIL" -password "$ADMIN_PASSWORD" -clients 20 -cycles 5 $flag; then
+    pass "Chat: 20 clients x 5 $mode cycles leave no client or goroutine behind"
+  else
+    fail "Chat: 20 clients x 5 $mode cycles leave no client or goroutine behind" "see the chatload lines above"
+  fi
+done
+
 echo "== done: $([ "$FAILED" = 0 ] && echo 'all checks passed' || echo 'some checks FAILED')"
 exit $FAILED

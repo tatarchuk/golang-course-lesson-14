@@ -195,6 +195,36 @@ jobs:
           }
           check "Every up migration has a down migration" pairs_ok
 
+          # Theme 14: live chat over WebSockets
+          header "Theme 14: static checks"
+          chat_files=(
+            internal/chat/hub.go internal/chat/client.go internal/chat/handler.go internal/chat/message.go
+            internal/chat/albums.go internal/chat/hub_test.go internal/chat/handler_test.go internal/chat/leak_test.go
+            internal/chat/albums_test.go internal/handler/web/chat.go internal/handler/web/chat_test.go
+            internal/app/chat_test.go web/templates/chat.html web/static/chat.js cmd/chatload/main.go
+            docs/chat/tests-before.txt docs/chat/tests-after.txt docs/chat/run.txt
+          )
+          missing=""
+          for f in "${chat_files[@]}"; do [ -f "$f" ] || missing="$missing $f"; done
+          if [ -z "$missing" ]; then pass "Chat code, tests and run logs exist"; else fail "Chat code, tests and run logs exist" "missing:$missing"; fi
+          check "go.mod has gorilla/websocket v1.5.3" grep -q 'github.com/gorilla/websocket v1.5.3' go.mod
+          # One owner of the registry (slide 26): only the hub's file touches h.rooms.
+          rooms_one_owner() { ! grep -rn 'h\.rooms' --include='*.go' --exclude='*_test.go' cmd internal | grep -v '^internal/chat/hub.go:'; }
+          check "The room registry h.rooms is used only in internal/chat/hub.go" rooms_one_owner
+          # One writer per connection (slide 27): data frames only from the write pump. Control
+          # frames may be written next to it (gorilla docs); the handler sends one before any pump runs.
+          one_writer() { ! grep -rnE '\.(WriteMessage|NextWriter)\(|conn\.WriteJSON\(' --include='*.go' --exclude='*_test.go' internal | grep -v '^internal/chat/client.go:'; }
+          check "WebSocket data frames are written only in internal/chat/client.go" one_writer
+          ws_behind_auth() { grep -q 'mux.Handle("GET /ws/chat", cookie(middleware.RequireRole(' internal/app/app.go; }
+          check "/ws/chat runs behind CookieAuth and RequireRole (no token in the URL)" ws_behind_auth
+          check "GET /api/v1/chat/stats is admin only" grep -q 'mux.Handle("GET /api/v1/chat/stats", admin(' internal/app/app.go
+          check "Logging's statusWriter passes http.Hijacker through" grep -q 'func (s \*statusWriter) Hijack()' internal/middleware/logging.go
+          check "Server shutdown also closes the chat connections (RegisterOnShutdown)" grep -q 'srv.RegisterOnShutdown(hub.Shutdown)' cmd/api/main.go
+          no_html_sinks() { ! grep -nE 'innerHTML|outerHTML|insertAdjacentHTML|document\.write' web/static/chat.js; }
+          check "chat.js never parses server text as HTML" no_html_sinks
+          script_only() { [ "$(grep -c '<script' web/templates/chat.html)" = "1" ] && grep -q '<script src="/static/chat.js" defer></script>' web/templates/chat.html; }
+          check "The chat page loads /static/chat.js and has no inline script" script_only
+
           exit $FAILED
 
   integration:
@@ -605,6 +635,20 @@ jobs:
           fi
           no_token_in_log() { ! grep -qE 'eyJ[A-Za-z0-9_-]{20,}\.' app.log; }
           check "No token or cookie value in the server log" no_token_in_log
+
+          # Theme 14: the live chat. Anonymous visitors get neither the page nor the socket; then
+          # connect/disconnect cycles (cmd/chatload) must leave no client and no goroutine behind.
+          header "Theme 14: live chat"
+          chat_page_anon() { [ "$(page "$WEB/chat")" = "303" ] && grep -qi '^location: /login' page.h; }
+          check "Anonymous GET /chat -> 303 /login" chat_page_anon
+          ws_anon() { [ "$(page "$WEB/ws/chat?room=general")" = "401" ]; }
+          check "Anonymous GET /ws/chat -> 401 before any upgrade" ws_anon
+          http "Admin GET /chat/stats -> 200" 200 GET /chat/stats
+          chat_cycles() { go run ./cmd/chatload -base http://127.0.0.1:8080 -email admin@albums.local -password "$ADMIN_PASSWORD" -clients 20 -cycles 5 "$@"; }
+          if out=$(chat_cycles 2>&1); then pass "Chat: 20 clients x 5 cycles with a close frame leave no client or goroutine behind"; else fail "Chat: 20 clients x 5 cycles with a close frame" "$out"; fi
+          echo "$out"
+          if out=$(chat_cycles -abrupt 2>&1); then pass "Chat: 20 clients x 5 cycles dropped without a close frame leave no client or goroutine behind"; else fail "Chat: 20 clients x 5 abrupt cycles" "$out"; fi
+          echo "$out"
 
           if [ "$FAILED" != "0" ]; then echo "---- last server log lines ----"; tail -n 40 app.log; fi
           exit $FAILED

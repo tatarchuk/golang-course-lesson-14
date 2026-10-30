@@ -70,11 +70,11 @@
 | Кадри сервера | `message`, `notice`, `presence` (хто прийшов/пішов і скільки онлайн), `history` (останні 50 повідомлень кімнати при вході), `error` |
 | Інтеграція з REST | створення альбому через API і видалення через API чи вебінтерфейс публікують `notice` у `general` |
 | Статистика | `GET /api/v1/chat/stats` лише для admin: клієнти за кімнатами й кількість горутин |
-| Життєвий цикл | ping/pong (60 с / 54 с), обмежений буфер відправки (16) з відключенням повільного клієнта (1008), коректне завершення сервера (1001 усім клієнтам) |
+| Життєвий цикл | ping/pong (60 с / 54 с), обмежений буфер відправки (256) з відключенням повільного клієнта (1008), коректне завершення сервера (1001 усім клієнтам) |
 
 Перевірка: тести з `-race` (три клієнти без дублікатів, ізоляція кімнат, автор, ролі, Origin, ліміти, раптове
-відключення, «мертвий» клієнт, 100 циклів підключення/відключення без витоку горутин, завершення сервера), ручні
-цикли в трьох браузерах і утилітою `cmd/chatload` зі статистикою до і після.
+відключення, «мертвий» клієнт, 100 циклів підключення/відключення без витоку горутин, завершення сервера), базовий
+сценарій у браузері (два користувачі в одній кімнаті) і цикли утилітою `cmd/chatload` зі статистикою до і після.
 
 ## Чеклісти з презентації
 
@@ -91,7 +91,7 @@
 
 ## Що здати
 
-- Скриншоти роботи: S1–S8 у репозиторії прикладів, C1–C4 у репозиторії застосунку (таблиці в README).
+- Скриншоти роботи: S1–S8 у репозиторії прикладів, C1–C2 у репозиторії застосунку (таблиці в README).
 - Посилання на обидва репозиторії (вище). Журнали команд, тестів і оглядів ШІ лежать у `docs/` кожного репозиторію.
 
 ---
@@ -138,12 +138,12 @@ Origin must equal Host (else 403); the client sends `{"text":"..."}` with 1-1000
 the sender only) and frames above 4096 bytes close the connection with 1009; server frames `message`, `notice`,
 `presence`, `history` (the room's last 50 messages on join) and `error`; creating an album through the API and deleting
 one through the API or the web UI publish a `notice` to `general`; `GET /api/v1/chat/stats` (admin only) shows clients
-per room and the goroutine count; ping/pong 60 s / 54 s, a bounded send buffer (16) that disconnects a slow client
+per room and the goroutine count; ping/pong 60 s / 54 s, a bounded send buffer (256) that disconnects a slow client
 (1008), a clean server shutdown (1001 to every client).
 
 Verification: tests with `-race` (three clients without duplicates, room isolation, author, roles, Origin, limits,
 abrupt disconnect, dead client, 100 connect/disconnect cycles without a goroutine leak, server shutdown) and manual
-cycles in three browsers and with `cmd/chatload`, with the stats before and after.
+cycles with `cmd/chatload`, with the stats before and after, and a basic case in a browser (two users in one room).
 
 ## Checklists from the deck
 
@@ -154,5 +154,5 @@ slide 45.
 
 ## Deliverables
 
-Screenshots S1-S8 in the examples repository and C1-C4 in the app repository (tables in the READMEs); links to both
+Screenshots S1-S8 in the examples repository and C1-C2 in the app repository (tables in the READMEs); links to both
 repositories (above). Command logs, test runs and the AI reviews are under `docs/` in each repository.
